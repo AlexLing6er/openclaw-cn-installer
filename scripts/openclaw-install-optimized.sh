@@ -305,7 +305,7 @@ install_prereqs_linux(){
 
   if command -v apt-get >/dev/null 2>&1; then
     sudo_run apt-get -o Acquire::ForceIPv4="$FORCE_IPV4" -o DPkg::Lock::Timeout=60 update
-    sudo_run apt-get -o Acquire::ForceIPv4="$FORCE_IPV4" -o DPkg::Lock::Timeout=60 install -y ca-certificates curl gnupg netcat-openbsd
+    sudo_run apt-get -o Acquire::ForceIPv4="$FORCE_IPV4" -o DPkg::Lock::Timeout=60 install -y ca-certificates curl gnupg netcat-openbsd git
     if [[ "$SKIP_BUILD_TOOLS" != "1" ]]; then
       sudo_run apt-get -o Acquire::ForceIPv4="$FORCE_IPV4" install -y build-essential python3 make g++ cmake
     fi
@@ -313,25 +313,25 @@ install_prereqs_linux(){
   fi
 
   if command -v dnf >/dev/null 2>&1; then
-    sudo_run bash -c 'dnf install -y ca-certificates curl nmap-ncat || dnf install -y ca-certificates curl netcat'
+    sudo_run bash -c 'dnf install -y ca-certificates curl nmap-ncat git || dnf install -y ca-certificates curl netcat git'
     [[ "$SKIP_BUILD_TOOLS" != "1" ]] && sudo_run dnf groupinstall -y "Development Tools" || true
     return 0
   fi
 
   if command -v yum >/dev/null 2>&1; then
-    sudo_run bash -c 'yum install -y ca-certificates curl nmap-ncat || yum install -y ca-certificates curl nc'
+    sudo_run bash -c 'yum install -y ca-certificates curl nmap-ncat git || yum install -y ca-certificates curl nc git'
     [[ "$SKIP_BUILD_TOOLS" != "1" ]] && sudo_run yum groupinstall -y "Development Tools" || true
     return 0
   fi
 
   if command -v pacman >/dev/null 2>&1; then
-    sudo_run pacman -Sy --noconfirm ca-certificates curl gnu-netcat
+    sudo_run pacman -Sy --noconfirm ca-certificates curl gnu-netcat git
     [[ "$SKIP_BUILD_TOOLS" != "1" ]] && sudo_run pacman -Sy --noconfirm base-devel python cmake || true
     return 0
   fi
 
   if command -v zypper >/dev/null 2>&1; then
-    sudo_run zypper --non-interactive install ca-certificates curl netcat-openbsd
+    sudo_run zypper --non-interactive install ca-certificates curl netcat-openbsd git
     [[ "$SKIP_BUILD_TOOLS" != "1" ]] && sudo_run zypper --non-interactive install -t pattern devel_basis || true
     return 0
   fi

@@ -84,6 +84,7 @@ openclaw plugins install @dingtalk-real-ai/dingtalk-connector
 
 ### Linux 兼容补充
 - 脚本会检测 CMake 版本；若低于 3.19（如 Ubuntu 20.04 常见 3.16），会尝试自动升级以避免 `node-llama-cpp` 构建失败。
+- 脚本会自动安装 `git`（避免 npm 依赖拉取时 `spawn git ENOENT`）。
 - 安装后会自动修正 npm prefix 的 PATH；若 shell 仍未刷新，重新登录或执行 `source ~/.bashrc`。
 
 ### 安全说明
