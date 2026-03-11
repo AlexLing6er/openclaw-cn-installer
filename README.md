@@ -90,6 +90,7 @@ openclaw plugins install @dingtalk-real-ai/dingtalk-connector
 ### 安全说明
 - 脚本目标是安装 OpenClaw，不改防火墙/SSH/系统关键服务。
 - 默认会执行安全清理（`CLEANUP=1`）：清理 npm 缓存 + 系统包缓存，减少磁盘占用并保持兼容性。
+- 默认**不会**执行 `apt autoremove`（避免误删非本脚本安装的软件/内核）。如需启用，设置 `CLEANUP_AUTOREMOVE=1`。
 - 如需关闭清理：设置 `CLEANUP=0`。
 - 如果只想先看不改动（Linux/macOS/WSL2）：
 

@@ -20,6 +20,7 @@ WSL_PROXY_PORT_CANDIDATES="${WSL_PROXY_PORT_CANDIDATES:-10808,7897}"
 NPM_REGISTRY="${NPM_REGISTRY:-}"
 DEBIAN_FRONTEND="${DEBIAN_FRONTEND:-noninteractive}"
 CLEANUP="${CLEANUP:-1}"                 # default safe cleanup for broad compatibility
+CLEANUP_AUTOREMOVE="${CLEANUP_AUTOREMOVE:-0}" # default off: avoid removing unrelated packages/kernels
 
 OS_KIND=""
 IS_WSL=0
@@ -509,6 +510,10 @@ install_openclaw(){
 
   if command -v openclaw >/dev/null 2>&1; then
     ok "openclaw: $(openclaw --version)"
+    # ensure parent shells can find command even when installer ran via pipe
+    if [[ -x "$npm_bin/openclaw" ]]; then
+      sudo_run ln -sf "$npm_bin/openclaw" /usr/local/bin/openclaw || true
+    fi
     return 0
   fi
 
@@ -538,7 +543,11 @@ safe_cleanup(){
   if [[ "$OS_KIND" == "linux" ]]; then
     if command -v apt-get >/dev/null 2>&1; then
       sudo_run apt-get clean || true
-      sudo_run apt-get autoremove -y || true
+      if [[ "$CLEANUP_AUTOREMOVE" == "1" ]]; then
+        sudo_run apt-get autoremove -y || true
+      else
+        log "Skipping apt autoremove by default (set CLEANUP_AUTOREMOVE=1 to enable)"
+      fi
     elif command -v dnf >/dev/null 2>&1; then
       sudo_run dnf clean all || true
     elif command -v yum >/dev/null 2>&1; then
