@@ -1,4 +1,4 @@
-# OpenClaw Max-Compatibility Installer / OpenClaw 高兼容安装器
+# OpenClaw Max-Compatibility Installer / 在国内一键安装 OpenClaw 高兼容安装器
 
 Universal OpenClaw installer for **Windows / WSL2 / macOS / Linux** with CN+Global presets, mirror fallback, proxy auto-detection, and check-only diagnostics.
 
