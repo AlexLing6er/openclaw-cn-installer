@@ -19,6 +19,7 @@ INSTALL_CHANNEL_PLUGINS="${INSTALL_CHANNEL_PLUGINS:-0}"
 WSL_PROXY_PORT_CANDIDATES="${WSL_PROXY_PORT_CANDIDATES:-10808,7897}"
 NPM_REGISTRY="${NPM_REGISTRY:-}"
 DEBIAN_FRONTEND="${DEBIAN_FRONTEND:-noninteractive}"
+CLEANUP="${CLEANUP:-1}"                 # default safe cleanup for broad compatibility
 
 OS_KIND=""
 IS_WSL=0
@@ -53,6 +54,7 @@ Common:
   WSL_PROXY_PORT_CANDIDATES=10808,7897,8888
   NPM_REGISTRY=https://registry.npmmirror.com
   FORCE_IPV4=1
+  CLEANUP=1|0                     Safe cleanup after install (default: 1)
 
 Examples:
   PROFILE=cn bash scripts/openclaw-install-optimized.sh
@@ -528,6 +530,28 @@ install_plugins(){
   openclaw plugins install @dingtalk-real-ai/dingtalk-connector || true
 }
 
+safe_cleanup(){
+  [[ "$CLEANUP" == "1" ]] || return 0
+  log "Running safe cleanup (compatibility-friendly)"
+  npm cache clean --force >/dev/null 2>&1 || true
+
+  if [[ "$OS_KIND" == "linux" ]]; then
+    if command -v apt-get >/dev/null 2>&1; then
+      sudo_run apt-get clean || true
+      sudo_run apt-get autoremove -y || true
+    elif command -v dnf >/dev/null 2>&1; then
+      sudo_run dnf clean all || true
+    elif command -v yum >/dev/null 2>&1; then
+      sudo_run yum clean all || true
+    elif command -v pacman >/dev/null 2>&1; then
+      sudo_run pacman -Scc --noconfirm || true
+    elif command -v zypper >/dev/null 2>&1; then
+      sudo_run zypper clean --all || true
+    fi
+  fi
+  ok "Safe cleanup completed"
+}
+
 check_only(){
   echo "OS=$OS_KIND WSL=$IS_WSL PROFILE=$PROFILE"
   echo "Proxy=${HTTPS_PROXY:-${https_proxy:-<none>}}"
@@ -565,6 +589,7 @@ main(){
   configure_npm_registry
   install_openclaw
   install_plugins
+  safe_cleanup
 
   ok "Done"
   printf "\n\033[1;32m%s\033[0m\n" "========================================"
