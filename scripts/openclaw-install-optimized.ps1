@@ -1,5 +1,8 @@
 #requires -Version 5.1
 
+# OpenClaw Windows Installer (high-compat)
+# Version: 2026-03-12-winfix3
+
 $Profile = 'auto'
 $InstallMethod = 'auto'
 $CheckOnly = $false
@@ -44,14 +47,32 @@ function Show-Credit {
   Write-Host ""
 }
 
-# TLS hardening for old PowerShell
-try {
-  [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
-} catch {}
+function Require-CurlExe {
+  $c = Get-Command curl.exe -ErrorAction SilentlyContinue
+  if(-not $c){ throw 'curl.exe not found. Please use Windows 10/11 default curl or install it first.' }
+}
 
 function Test-Url($url){
-  try { (Invoke-WebRequest -UseBasicParsing -Uri $url -Method Head -TimeoutSec 12).StatusCode -ge 200 | Out-Null; return $true }
-  catch { return $false }
+  try {
+    & curl.exe -L -I --max-time 12 --silent --show-error $url *> $null
+    return ($LASTEXITCODE -eq 0)
+  } catch {
+    return $false
+  }
+}
+
+function Get-Text($url){
+  & curl.exe -L --max-time 15 --silent --show-error $url
+}
+
+function Measure-UrlMs([string]$Url){
+  try {
+    $t = & curl.exe -L -I --max-time 10 -o NUL -s -w "%{time_total}" $Url
+    if(-not $t){ return $null }
+    return [int]([double]$t * 1000)
+  } catch {
+    return $null
+  }
 }
 
 function Invoke-WithRetry([scriptblock]$Script,[int]$Retries=3,[int]$DelaySec=2){
@@ -67,12 +88,13 @@ function Invoke-WithRetry([scriptblock]$Script,[int]$Retries=3,[int]$DelaySec=2)
 
 function Get-WindowsProxy {
   try {
-    $proxy = (netsh winhttp show proxy | Out-String)
-    if($proxy -match 'Proxy Server\(s\)\s*:\s*(.+)'){
-      $raw = $Matches[1].Trim()
-      if($raw -match '([a-z]+)=([^;\s]+)'){ $raw = $Matches[2] }
-      if($raw -notmatch '^https?://'){ $raw = "http://$raw" }
-      return $raw
+    $raw = (netsh winhttp show proxy | Out-String)
+    if($raw -match 'Proxy Server\(s\)\s*:\s*(.+)'){
+      $p = $Matches[1].Trim()
+      if($p -match '^http=([^;\s]+)'){ return "http://$($Matches[1])" }
+      if($p -match '^https=([^;\s]+)'){ return "http://$($Matches[1])" }
+      if($p -match '^[\w\.-]+:\d+$'){ return "http://$p" }
+      if($p -match '^https?://'){ return $p }
     }
   } catch {}
   return ''
@@ -118,20 +140,14 @@ function Ensure-Node22 {
   Log 'Installing Node.js LTS via winget'
   Invoke-WithRetry { winget install OpenJS.NodeJS.LTS --accept-package-agreements --accept-source-agreements --silent | Out-Null }
 
-  $env:Path = [System.Environment]::GetEnvironmentVariable('Path','Machine') + ';' + [System.Environment]::GetEnvironmentVariable('Path','User')
-  $nodeCheck = Get-Command node -ErrorAction SilentlyContinue
-  if(-not $nodeCheck){ throw 'Node install completed but node is not in PATH. Open a new PowerShell and rerun.' }
-}
+  $machinePath = [Environment]::GetEnvironmentVariable('Path','Machine')
+  $userPath = [Environment]::GetEnvironmentVariable('Path','User')
+  $env:Path = "$machinePath;$userPath;$env:Path"
 
-function Measure-UrlMs([string]$Url){
-  try {
-    $sw = [System.Diagnostics.Stopwatch]::StartNew()
-    Invoke-WebRequest -UseBasicParsing -Uri $Url -Method Head -TimeoutSec 10 | Out-Null
-    $sw.Stop()
-    return [int]$sw.ElapsedMilliseconds
-  } catch {
-    return $null
+  if(-not (Get-Command node -ErrorAction SilentlyContinue)){
+    throw 'Node install finished but node is not in PATH. Open a new terminal and retry.'
   }
+  Ok "Node OK after install: $(node -v)"
 }
 
 function Select-FastestUrl([string[]]$Urls){
@@ -139,10 +155,7 @@ function Select-FastestUrl([string[]]$Urls){
   $bestMs = [int]::MaxValue
   foreach($u in $Urls){
     $ms = Measure-UrlMs $u
-    if($null -ne $ms -and $ms -lt $bestMs){
-      $bestMs = $ms
-      $bestUrl = $u
-    }
+    if($null -ne $ms -and $ms -lt $bestMs){ $bestMs = $ms; $bestUrl = $u }
   }
   return $bestUrl
 }
@@ -157,11 +170,8 @@ function Select-NpmRegistry {
 
   $hit = $null
   if($script:Route -eq 'PROXY_OFFICIAL' -or $script:Route -eq 'GLOBAL_DIRECT'){
-    if(Test-Url $official){
-      $hit = $official
-    } else {
-      $hit = Select-FastestUrl @($m1,$m2,$m3,$official)
-    }
+    if(Test-Url $official){ $hit = $official }
+    else { $hit = Select-FastestUrl @($m1,$m2,$m3,$official) }
   } else {
     $hit = Select-FastestUrl @($m1,$m2,$m3)
     if(-not $hit -and (Test-Url $official)){ $hit = $official }
@@ -177,49 +187,43 @@ function Setup-UserNpmPrefix {
   $prefix = Join-Path $HOME '.npm-global'
   if(-not (Test-Path $prefix)){ New-Item -ItemType Directory -Force -Path $prefix | Out-Null }
   npm config set prefix $prefix | Out-Null
-
-  $bin = Join-Path $prefix 'node_modules\npm\bin'
-  if(-not ($env:Path -like "*$prefix*")){
-    $env:Path = "$prefix;$env:Path"
-  }
+  if(-not ($env:Path -like "*$prefix*")){ $env:Path = "$prefix;$env:Path" }
   Ok "Using user npm prefix: $prefix"
 }
 
 function Install-OpenClawViaNpm {
+  if($UseUserNpmPrefix){ Setup-UserNpmPrefix }
+
   $reg = Select-NpmRegistry
   npm config set registry $reg | Out-Null
   Ok "npm registry: $reg"
-
-  if($UseUserNpmPrefix){ Setup-UserNpmPrefix }
 
   Log 'Installing openclaw via npm'
   try {
     Invoke-WithRetry { npm install -g openclaw --no-fund --no-audit }
   } catch {
-    if($UseUserNpmPrefix){ throw }
     Warn "Global npm install failed, trying user prefix fallback..."
     Setup-UserNpmPrefix
     Invoke-WithRetry { npm install -g openclaw --no-fund --no-audit }
   }
 
   $cmd = Get-Command openclaw -ErrorAction SilentlyContinue
-  if(-not $cmd){
-    Warn 'openclaw not found in current PATH. Try opening a new PowerShell and run: openclaw --version'
-  } else {
-    Ok "openclaw: $(openclaw --version)"
-  }
+  if(-not $cmd){ Warn 'openclaw not in PATH yet. Open a new PowerShell and run: openclaw --version' }
+  else { Ok "openclaw: $(openclaw --version)" }
 }
 
 function Install-OpenClawOfficial {
   Log 'Installing via official script: https://openclaw.ai/install.ps1'
-  Invoke-WithRetry { iwr -useb https://openclaw.ai/install.ps1 | iex }
+  $content = Get-Text 'https://openclaw.ai/install.ps1'
+  if(-not $content){ throw 'Failed to download official install script.' }
+  Invoke-Expression $content
 }
 
 function Get-RegionHint {
   $candidates = @('https://ipapi.co/country','https://ipinfo.io/country')
   foreach($u in $candidates){
     try {
-      $v = (Invoke-WebRequest -UseBasicParsing -Uri $u -TimeoutSec 6).Content.Trim()
+      $v = (Get-Text $u).Trim()
       if($v -eq 'CN'){ return 'CN' }
       if($v -match '^[A-Z]{2}$'){ return 'NON_CN' }
     } catch {}
@@ -234,12 +238,7 @@ function Resolve-Route {
   if($Profile -eq 'cn'){ return 'CN_MIRROR' }
   if($Profile -eq 'global'){ return 'GLOBAL_DIRECT' }
 
-  # Auto policy:
-  # proxy on -> official first
-  # no proxy + NON_CN -> official first
-  # no proxy + CN -> CN mirror first
   if($hasProxy){ return 'PROXY_OFFICIAL' }
-
   $script:RegionHint = Get-RegionHint
   if($script:RegionHint -eq 'CN'){ return 'CN_MIRROR' }
   if($script:RegionHint -eq 'NON_CN'){ return 'GLOBAL_DIRECT' }
@@ -249,7 +248,7 @@ function Resolve-Route {
 
 function Print-Decision([string]$Route){
   Write-Host '=== INSTALL DECISION ==='
-  Write-Host "DetectedOS=Windows"
+  Write-Host 'DetectedOS=Windows'
   Write-Host "Profile=$Profile"
   Write-Host "Route=$Route"
   Write-Host "RegionHint=$script:RegionHint"
@@ -269,6 +268,7 @@ function Check-EndPoints {
   foreach($u in $endpoints){ if(Test-Url $u){ Ok "reachable: $u" } else { Warn "unreachable: $u" } }
 }
 
+Require-CurlExe
 Show-Credit
 Log "Profile=$Profile InstallMethod=$InstallMethod CheckOnly=$CheckOnly"
 Enable-ProxyIfDetected
@@ -289,9 +289,8 @@ switch($InstallMethod){
   'npm' { Install-OpenClawViaNpm }
   'official' { Install-OpenClawOfficial }
   default {
-    try {
-      Install-OpenClawViaNpm
-    } catch {
+    try { Install-OpenClawViaNpm }
+    catch {
       Warn "npm method failed: $($_.Exception.Message)"
       Warn 'Falling back to official install script...'
       Install-OpenClawOfficial
