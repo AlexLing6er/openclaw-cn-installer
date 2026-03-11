@@ -22,6 +22,8 @@ DEBIAN_FRONTEND="${DEBIAN_FRONTEND:-noninteractive}"
 
 OS_KIND=""
 IS_WSL=0
+ROUTE="UNKNOWN"
+SELECTED_NODE_SETUP_URL=""
 
 log(){ printf "\033[36m[INFO]\033[0m %s\n" "$*"; }
 ok(){ printf "\033[32m[ OK ]\033[0m %s\n" "$*"; }
@@ -162,6 +164,44 @@ set_node_proxy_switch(){
   [[ "$NODE_USE_ENV_PROXY" == "1" ]] && export NODE_USE_ENV_PROXY=1 && log "NODE_USE_ENV_PROXY=1"
 }
 
+decide_route(){
+  local has_proxy="0"
+  [[ -n "${HTTPS_PROXY:-${https_proxy:-}}" ]] && has_proxy="1"
+
+  local official_ok="0" cn_ok="0"
+  mapfile -t cargs < <(curl_common)
+  curl -I "${cargs[@]}" --max-time 10 "https://registry.npmjs.org/openclaw" >/dev/null 2>&1 && official_ok="1"
+  curl -I "${cargs[@]}" --max-time 10 "https://registry.npmmirror.com/openclaw" >/dev/null 2>&1 && cn_ok="1"
+
+  if [[ "$PROFILE" == "cn" ]]; then
+    ROUTE="CN_MIRROR"
+  elif [[ "$PROFILE" == "global" ]]; then
+    ROUTE="GLOBAL_DIRECT"
+  else
+    if [[ "$has_proxy" == "1" && "$official_ok" == "1" ]]; then
+      ROUTE="PROXY_OFFICIAL"
+    elif [[ "$cn_ok" == "1" ]]; then
+      ROUTE="CN_MIRROR"
+    elif [[ "$official_ok" == "1" ]]; then
+      ROUTE="GLOBAL_DIRECT"
+    else
+      ROUTE="CN_MIRROR"
+    fi
+  fi
+}
+
+print_decision(){
+  echo "=== INSTALL DECISION ==="
+  echo "DetectedOS=$OS_KIND"
+  echo "DetectedEnv=$([[ "$IS_WSL" -eq 1 ]] && echo WSL2 || echo "$OS_KIND")"
+  echo "Profile=$PROFILE"
+  echo "Route=$ROUTE"
+  echo "Proxy=${HTTPS_PROXY:-${https_proxy:-<none>}}"
+  echo "NpmRegistry=${NPM_REGISTRY:-<auto>}"
+  echo "NodeSetup=${SELECTED_NODE_SETUP_URL:-<auto>}"
+  echo "========================"
+}
+
 select_first_reachable(){
   local outvar="$1"; shift
   local u
@@ -216,11 +256,18 @@ ensure_node22_linux(){
   if command -v node >/dev/null 2>&1 && [[ "$(node -p 'process.versions.node.split(".")[0]')" -ge 22 ]]; then ok "Node OK: $(node -v)"; return 0; fi
 
   local setup_url
-  select_first_reachable setup_url \
-    "https://deb.nodesource.com/setup_22.x" \
-    "https://mirrors.ustc.edu.cn/nodesource/deb/setup_22.x"
+  if [[ "$ROUTE" == "CN_MIRROR" ]]; then
+    select_first_reachable setup_url \
+      "https://mirrors.ustc.edu.cn/nodesource/deb/setup_22.x" \
+      "https://deb.nodesource.com/setup_22.x"
+  else
+    select_first_reachable setup_url \
+      "https://deb.nodesource.com/setup_22.x" \
+      "https://mirrors.ustc.edu.cn/nodesource/deb/setup_22.x"
+  fi
 
   [[ -n "${setup_url:-}" ]] || { err "No reachable NodeSource setup mirror"; exit 1; }
+  SELECTED_NODE_SETUP_URL="$setup_url"
   log "Using Node setup: $setup_url"
   local tmp; tmp="$(mktemp)"
   mapfile -t cargs < <(curl_common)
@@ -251,11 +298,19 @@ ensure_node22_macos(){
 configure_npm_registry(){
   if [[ -z "$NPM_REGISTRY" ]]; then
     local chosen=""
-    select_first_reachable chosen \
-      "https://registry.npmjs.org/openclaw" \
-      "https://registry.npmmirror.com/openclaw" \
-      "https://mirrors.tencent.com/npm/openclaw" \
-      "https://repo.huaweicloud.com/repository/npm/openclaw" || true
+    if [[ "$ROUTE" == "CN_MIRROR" ]]; then
+      select_first_reachable chosen \
+        "https://registry.npmmirror.com/openclaw" \
+        "https://mirrors.tencent.com/npm/openclaw" \
+        "https://repo.huaweicloud.com/repository/npm/openclaw" \
+        "https://registry.npmjs.org/openclaw" || true
+    else
+      select_first_reachable chosen \
+        "https://registry.npmjs.org/openclaw" \
+        "https://registry.npmmirror.com/openclaw" \
+        "https://mirrors.tencent.com/npm/openclaw" \
+        "https://repo.huaweicloud.com/repository/npm/openclaw" || true
+    fi
     case "$chosen" in
       *npmmirror*) NPM_REGISTRY="https://registry.npmmirror.com" ;;
       *tencent*) NPM_REGISTRY="https://mirrors.tencent.com/npm" ;;
@@ -312,11 +367,13 @@ main(){
   set_node_proxy_switch
   wsl_proxy_autodetect
   macos_proxy_autodetect
+  decide_route
 
-  log "Plan: profile=$PROFILE check_only=$CHECK_ONLY os=$OS_KIND wsl=$IS_WSL"
+  log "Plan: profile=$PROFILE check_only=$CHECK_ONLY os=$OS_KIND wsl=$IS_WSL route=$ROUTE"
 
-  if [[ "$CHECK_ONLY" == "1" ]]; then check_only; exit 0; fi
+  if [[ "$CHECK_ONLY" == "1" ]]; then print_decision; check_only; exit 0; fi
 
+  print_decision
   network_report
   install_prereqs_linux
   install_prereqs_macos

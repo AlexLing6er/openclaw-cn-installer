@@ -92,16 +92,21 @@ function Ensure-Node22 {
 function Select-NpmRegistry {
   if($NpmRegistry){ return $NpmRegistry }
 
-  if($Profile -eq 'cn'){
-    return 'https://registry.npmmirror.com'
+  if($script:Route -eq 'CN_MIRROR' -or $Profile -eq 'cn'){
+    $candidates = @(
+      'https://registry.npmmirror.com/openclaw',
+      'https://mirrors.tencent.com/npm/openclaw',
+      'https://repo.huaweicloud.com/repository/npm/openclaw',
+      'https://registry.npmjs.org/openclaw'
+    )
+  } else {
+    $candidates = @(
+      'https://registry.npmjs.org/openclaw',
+      'https://registry.npmmirror.com/openclaw',
+      'https://mirrors.tencent.com/npm/openclaw',
+      'https://repo.huaweicloud.com/repository/npm/openclaw'
+    )
   }
-
-  $candidates = @(
-    'https://registry.npmjs.org/openclaw',
-    'https://registry.npmmirror.com/openclaw',
-    'https://mirrors.tencent.com/npm/openclaw',
-    'https://repo.huaweicloud.com/repository/npm/openclaw'
-  )
 
   $hit = $candidates | Where-Object { Test-Url $_ } | Select-Object -First 1
   if($hit -match 'npmmirror'){ return 'https://registry.npmmirror.com' }
@@ -149,6 +154,30 @@ function Install-OpenClawOfficial {
   Invoke-WithRetry { iwr -useb https://openclaw.ai/install.ps1 | iex }
 }
 
+function Resolve-Route {
+  $hasProxy = [bool]($env:HTTPS_PROXY -or $env:HTTP_PROXY)
+  $official = Test-Url 'https://registry.npmjs.org/openclaw'
+  $cn = Test-Url 'https://registry.npmmirror.com/openclaw'
+
+  if($Profile -eq 'cn'){ return 'CN_MIRROR' }
+  if($Profile -eq 'global'){ return 'GLOBAL_DIRECT' }
+
+  if($hasProxy -and $official){ return 'PROXY_OFFICIAL' }
+  if($cn){ return 'CN_MIRROR' }
+  if($official){ return 'GLOBAL_DIRECT' }
+  return 'CN_MIRROR'
+}
+
+function Print-Decision([string]$Route){
+  Write-Host '=== INSTALL DECISION ==='
+  Write-Host "DetectedOS=Windows"
+  Write-Host "Profile=$Profile"
+  Write-Host "Route=$Route"
+  Write-Host "Proxy=$($env:HTTPS_PROXY)"
+  Write-Host "InstallMethod=$InstallMethod"
+  Write-Host '========================'
+}
+
 function Check-EndPoints {
   $endpoints = @(
     'https://openclaw.ai/install.ps1',
@@ -162,6 +191,8 @@ function Check-EndPoints {
 
 Log "Profile=$Profile InstallMethod=$InstallMethod CheckOnly=$CheckOnly"
 Enable-ProxyIfDetected
+$script:Route = Resolve-Route
+Print-Decision $script:Route
 Check-EndPoints
 
 if($CheckOnly){

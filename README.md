@@ -99,6 +99,16 @@ curl -fsSL https://openclaw.ai/install.sh | bash -s -- --install-method git
 
 ---
 
+## Deterministic Route Decision / 确定性安装路由
+
+Installer prints a single final route on every run:
+
+- `PROXY_OFFICIAL` (proxy available + official endpoints reachable)
+- `CN_MIRROR` (prefer CN mirrors)
+- `GLOBAL_DIRECT` (direct global path)
+
+每次运行都会输出唯一安装路由，便于排障与审计。
+
 ## Proxy Auto Detection / 代理自动检测
 
 ### WSL2
