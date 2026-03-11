@@ -15,6 +15,7 @@ NPM_REGISTRY="${NPM_REGISTRY:-}"
 SKIP_BUILD_TOOLS="${SKIP_BUILD_TOOLS:-0}"
 USE_SUDO_NPM="${USE_SUDO_NPM:-1}"
 PRINT_ONLY="${PRINT_ONLY:-0}"
+INSTALL_CHANNEL_PLUGINS="${INSTALL_CHANNEL_PLUGINS:-1}"
 
 log()  { printf "\033[36m[INFO]\033[0m %s\n" "$*"; }
 ok()   { printf "\033[32m[ OK ]\033[0m %s\n" "$*"; }
@@ -33,6 +34,7 @@ Env options:
   SKIP_BUILD_TOOLS=1                (optional)
   USE_SUDO_NPM=1|0                  (default: 1)
   PRINT_ONLY=1                      (only print plan)
+  INSTALL_CHANNEL_PLUGINS=1|0       (default: 1)
 
 Examples:
   NPM_REGISTRY=https://registry.npmmirror.com FORCE_IPV4=1 bash openclaw-install-optimized.sh
@@ -214,6 +216,34 @@ install_openclaw() {
   fi
 }
 
+install_plugins() {
+  if [[ "$INSTALL_CHANNEL_PLUGINS" != "1" ]]; then
+    warn "Plugin install skipped (INSTALL_CHANNEL_PLUGINS=0)"
+    return
+  fi
+
+  if ! command -v openclaw >/dev/null 2>&1; then
+    warn "openclaw command not found; skip plugin installation"
+    return
+  fi
+
+  log "Installing channel plugins (Feishu/WeCom/DingTalk)..."
+  local plugins=(
+    "@m1heng-clawd/feishu"
+    "@wecom/wecom-openclaw-plugin"
+    "@dingtalk-real-ai/dingtalk-connector"
+  )
+
+  local p
+  for p in "${plugins[@]}"; do
+    if openclaw plugins install "$p"; then
+      ok "Plugin installed: $p"
+    else
+      warn "Plugin install failed: $p"
+    fi
+  done
+}
+
 print_summary() {
   echo
   ok "Done. Summary:"
@@ -223,6 +253,8 @@ print_summary() {
   echo
   echo "Recommended usage (WSL/CN):"
   echo "  NPM_REGISTRY=https://registry.npmmirror.com FORCE_IPV4=1 bash $0"
+  echo "Plugin toggle:"
+  echo "  INSTALL_CHANNEL_PLUGINS=0 bash $0"
 }
 
 main() {
@@ -248,6 +280,7 @@ main() {
   install_node22
   configure_npm_registry_if_needed
   install_openclaw
+  install_plugins
   print_summary
 }
 
