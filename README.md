@@ -64,20 +64,38 @@ curl -fsSL https://raw.githubusercontent.com/AlexLing6er/openclaw-cn-installer/m
 ### Windows PowerShell (Run as Administrator)
 
 ```powershell
-# Download then run (recommended)
-# 下载后执行（推荐）
+# Recommended wrapper (CN)
+# 推荐：兼容增强脚本（国内）
 iwr https://raw.githubusercontent.com/AlexLing6er/openclaw-cn-installer/main/scripts/openclaw-install-optimized.ps1 -OutFile .\openclaw-install-optimized.ps1
-powershell -ExecutionPolicy Bypass -File .\openclaw-install-optimized.ps1 -Profile cn
+powershell -ExecutionPolicy Bypass -File .\openclaw-install-optimized.ps1 -Profile cn -InstallMethod auto
 
-# Global profile
-powershell -ExecutionPolicy Bypass -File .\openclaw-install-optimized.ps1 -Profile global
+# Recommended wrapper (Global)
+# 推荐：兼容增强脚本（海外）
+powershell -ExecutionPolicy Bypass -File .\openclaw-install-optimized.ps1 -Profile global -InstallMethod auto
 
 # Check-only
 powershell -ExecutionPolicy Bypass -File .\openclaw-install-optimized.ps1 -CheckOnly
 ```
 
-> If your shell blocks script execution, use an elevated PowerShell and keep `-ExecutionPolicy Bypass`.
-> 如果系统限制脚本执行，请使用管理员 PowerShell 并保留 `-ExecutionPolicy Bypass`。
+#### Official fallback options / 官方备用方式
+
+```powershell
+# Option A: Official install script
+# 方式A：官方安装脚本
+iwr -useb https://openclaw.ai/install.ps1 | iex
+
+# Option B: npm install
+# 方式B：npm 安装
+npm i -g openclaw
+openclaw onboard
+
+# Option C: source install (Git)
+# 方式C：源码安装（Git）
+curl -fsSL https://openclaw.ai/install.sh | bash -s -- --install-method git
+```
+
+> If script execution is blocked, use elevated PowerShell with `-ExecutionPolicy Bypass`.
+> 如脚本执行受限，请使用管理员 PowerShell 并保留 `-ExecutionPolicy Bypass`。
 
 ---
 
