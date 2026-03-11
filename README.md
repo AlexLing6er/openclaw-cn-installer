@@ -25,6 +25,26 @@ PROFILE=global bash scripts/openclaw-install-optimized.sh
 CHECK_ONLY=1 PROFILE=auto bash scripts/openclaw-install-optimized.sh
 ```
 
+## One-line install from GitHub / GitHub 一键安装
+
+```bash
+# Auto profile (recommended for most users)
+# 自动模式（大多数用户推荐）
+curl -fsSL https://raw.githubusercontent.com/AlexLing6er/openclaw-cn-installer/main/scripts/openclaw-install-optimized.sh | bash
+
+# China profile (CN network defaults)
+# 国内网络推荐（中国环境默认）
+curl -fsSL https://raw.githubusercontent.com/AlexLing6er/openclaw-cn-installer/main/scripts/openclaw-install-optimized.sh | PROFILE=cn bash
+
+# Global profile (overseas users)
+# 海外网络推荐
+curl -fsSL https://raw.githubusercontent.com/AlexLing6er/openclaw-cn-installer/main/scripts/openclaw-install-optimized.sh | PROFILE=global bash
+
+# Check only (no system changes)
+# 仅检查，不改系统
+curl -fsSL https://raw.githubusercontent.com/AlexLing6er/openclaw-cn-installer/main/scripts/openclaw-install-optimized.sh | CHECK_ONLY=1 bash
+```
+
 ## Common options / 常用参数
 
 - `AUTO_PROXY=1|0`
