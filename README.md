@@ -267,6 +267,11 @@ Use in GitHub:
 
 ---
 
+## Author / 作者
+
+- By 逗号
+- 博客：https://www.youdiandou.store
+
 ## Security Note / 安全说明
 
 - Repo excludes local memory/state files.

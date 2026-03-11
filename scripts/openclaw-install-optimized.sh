@@ -31,6 +31,13 @@ ok(){ printf "\033[32m[ OK ]\033[0m %s\n" "$*"; }
 warn(){ printf "\033[33m[WARN]\033[0m %s\n" "$*"; }
 err(){ printf "\033[31m[ERR ]\033[0m %s\n" "$*"; }
 
+show_credit(){
+  printf "\n\033[35m%s\033[0m\n" "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+  printf "\033[35m%s\033[0m\n" "By 逗号"
+  printf "\033[35m%s\033[0m\n" "博客: https://www.youdiandou.store"
+  printf "\033[35m%s\033[0m\n\n" "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+}
+
 usage(){
   cat <<'EOF'
 Usage:
@@ -469,6 +476,7 @@ check_only(){
 
 main(){
   [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]] && usage && exit 0
+  show_credit
   need_cmd bash; need_cmd curl
 
   detect_platform

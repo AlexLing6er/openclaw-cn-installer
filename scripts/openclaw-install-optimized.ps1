@@ -18,6 +18,15 @@ function Ok($m){ Write-Host "[ OK ] $m" -ForegroundColor Green }
 function Warn($m){ Write-Host "[WARN] $m" -ForegroundColor Yellow }
 function Err($m){ Write-Host "[ERR ] $m" -ForegroundColor Red }
 
+function Show-Credit {
+  Write-Host ""
+  Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Magenta
+  Write-Host "By 逗号" -ForegroundColor Magenta
+  Write-Host "博客: https://www.youdiandou.store" -ForegroundColor Magenta
+  Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Magenta
+  Write-Host ""
+}
+
 # TLS hardening for old PowerShell
 try {
   [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
@@ -243,6 +252,7 @@ function Check-EndPoints {
   foreach($u in $endpoints){ if(Test-Url $u){ Ok "reachable: $u" } else { Warn "unreachable: $u" } }
 }
 
+Show-Credit
 Log "Profile=$Profile InstallMethod=$InstallMethod CheckOnly=$CheckOnly"
 Enable-ProxyIfDetected
 $script:Route = Resolve-Route
