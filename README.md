@@ -33,6 +33,12 @@ Universal OpenClaw installer for Windows/WSL2/macOS/Linux with CN+Global profile
 
 ---
 
+## Fast Path (Choose by scenario) / 最快路径（按场景选）
+
+- 中国大陆 + WSL2/macOS/Linux：用 `PROFILE=cn`
+- 海外 Win/macOS/Linux：用 `PROFILE=global`
+- 不确定环境：先跑 `CHECK_ONLY=1`
+
 ## One-line Install / 一键安装
 
 ### Linux / WSL2 / macOS
@@ -135,6 +141,28 @@ Depending on platform and selected mirror, installer may access:
 When mirrors are selected, most dependency traffic can stay on CN mirrors.
 
 ---
+
+## Troubleshooting (Copy/Paste) / 常见问题快速修复
+
+### 1) Node fetch failed / ECONNRESET（常见于代理环境）
+
+```bash
+export NODE_USE_ENV_PROXY=1
+# WSL2: customize ports if needed
+WSL_PROXY_PORT_CANDIDATES=10808,7897,8888 CHECK_ONLY=1 PROFILE=cn bash scripts/openclaw-install-optimized.sh
+```
+
+### 2) npm install 太慢或超时
+
+```bash
+NPM_REGISTRY=https://registry.npmmirror.com PROFILE=cn bash scripts/openclaw-install-optimized.sh
+```
+
+### 3) 想完全不改系统先看检测结果
+
+```bash
+CHECK_ONLY=1 PROFILE=auto bash scripts/openclaw-install-optimized.sh
+```
 
 ## Check-Only Mode / 安全检查模式
 
