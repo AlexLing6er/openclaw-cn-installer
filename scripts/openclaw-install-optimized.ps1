@@ -1,6 +1,5 @@
 #requires -Version 5.1
 $ErrorActionPreference = 'Stop'
-$script:RegionHint = 'UNKNOWN'
 
 param(
   [ValidateSet('auto','cn','global')]
@@ -12,6 +11,8 @@ param(
   [int[]]$ProxyPorts = @(10808,7897),
   [switch]$UseUserNpmPrefix
 )
+
+$script:RegionHint = 'UNKNOWN'
 
 function Log($m){ Write-Host "[INFO] $m" -ForegroundColor Cyan }
 function Ok($m){ Write-Host "[ OK ] $m" -ForegroundColor Green }
