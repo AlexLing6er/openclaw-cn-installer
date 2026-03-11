@@ -9,6 +9,7 @@ $CheckOnly = $false
 $NpmRegistry = ''
 $ProxyPorts = @(10808,7897)
 $UseUserNpmPrefix = $false
+$DetectLocalProxyPort = $false
 
 for($i=0; $i -lt $args.Count; $i++){
   $k = "$($args[$i])"
@@ -24,6 +25,7 @@ for($i=0; $i -lt $args.Count; $i++){
     }
     '^-CheckOnly$' { $CheckOnly = $true; continue }
     '^-UseUserNpmPrefix$' { $UseUserNpmPrefix = $true; continue }
+    '^-DetectLocalProxyPort$' { $DetectLocalProxyPort = $true; continue }
   }
 }
 
@@ -113,8 +115,13 @@ function Get-ReachableLocalProxy {
 }
 
 function Enable-ProxyIfDetected {
-  $proxy = Get-WindowsProxy
-  if(-not $proxy){ $proxy = Get-ReachableLocalProxy }
+  # Proxy = explicitly configured system proxy (WinHTTP/env) by default.
+  # Local port probing is optional because a listening port != system proxy enabled.
+  $proxy = $env:HTTPS_PROXY
+  if(-not $proxy){ $proxy = $env:HTTP_PROXY }
+  if(-not $proxy){ $proxy = Get-WindowsProxy }
+  if((-not $proxy) -and $DetectLocalProxyPort){ $proxy = Get-ReachableLocalProxy }
+
   if($proxy){
     $env:HTTP_PROXY = $proxy
     $env:HTTPS_PROXY = $proxy
@@ -144,8 +151,24 @@ function Ensure-Node22 {
   $userPath = [Environment]::GetEnvironmentVariable('Path','User')
   $env:Path = "$machinePath;$userPath;$env:Path"
 
-  if(-not (Get-Command node -ErrorAction SilentlyContinue)){
-    throw 'Node install finished but node is not in PATH. Open a new terminal and retry.'
+  $nodeCmd = Get-Command node -ErrorAction SilentlyContinue
+  if(-not $nodeCmd){
+    $candidates = @(
+      'C:\Program Files\nodejs\node.exe',
+      "$env:LOCALAPPDATA\Programs\nodejs\node.exe"
+    )
+    foreach($c in $candidates){
+      if(Test-Path $c){
+        $nodeDir = Split-Path $c -Parent
+        $env:Path = "$nodeDir;$env:Path"
+        break
+      }
+    }
+    $nodeCmd = Get-Command node -ErrorAction SilentlyContinue
+  }
+
+  if(-not $nodeCmd){
+    throw 'Node installed but not visible in current PATH. Open a new terminal and rerun installer.'
   }
   Ok "Node OK after install: $(node -v)"
 }
