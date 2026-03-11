@@ -97,26 +97,50 @@ function Ensure-Node22 {
   if(-not $nodeCheck){ throw 'Node install completed but node is not in PATH. Open a new PowerShell and rerun.' }
 }
 
+function Measure-UrlMs([string]$Url){
+  try {
+    $sw = [System.Diagnostics.Stopwatch]::StartNew()
+    Invoke-WebRequest -Uri $Url -Method Head -TimeoutSec 10 | Out-Null
+    $sw.Stop()
+    return [int]$sw.ElapsedMilliseconds
+  } catch {
+    return $null
+  }
+}
+
+function Select-FastestUrl([string[]]$Urls){
+  $bestUrl = $null
+  $bestMs = [int]::MaxValue
+  foreach($u in $Urls){
+    $ms = Measure-UrlMs $u
+    if($null -ne $ms -and $ms -lt $bestMs){
+      $bestMs = $ms
+      $bestUrl = $u
+    }
+  }
+  return $bestUrl
+}
+
 function Select-NpmRegistry {
   if($NpmRegistry){ return $NpmRegistry }
 
-  if($script:Route -eq 'CN_MIRROR' -or $Profile -eq 'cn'){
-    $candidates = @(
-      'https://registry.npmmirror.com/openclaw',
-      'https://mirrors.tencent.com/npm/openclaw',
-      'https://repo.huaweicloud.com/repository/npm/openclaw',
-      'https://registry.npmjs.org/openclaw'
-    )
+  $official = 'https://registry.npmjs.org/openclaw'
+  $m1 = 'https://registry.npmmirror.com/openclaw'
+  $m2 = 'https://mirrors.tencent.com/npm/openclaw'
+  $m3 = 'https://repo.huaweicloud.com/repository/npm/openclaw'
+
+  $hit = $null
+  if($script:Route -eq 'PROXY_OFFICIAL' -or $script:Route -eq 'GLOBAL_DIRECT'){
+    if(Test-Url $official){
+      $hit = $official
+    } else {
+      $hit = Select-FastestUrl @($m1,$m2,$m3,$official)
+    }
   } else {
-    $candidates = @(
-      'https://registry.npmjs.org/openclaw',
-      'https://registry.npmmirror.com/openclaw',
-      'https://mirrors.tencent.com/npm/openclaw',
-      'https://repo.huaweicloud.com/repository/npm/openclaw'
-    )
+    $hit = Select-FastestUrl @($m1,$m2,$m3)
+    if(-not $hit -and (Test-Url $official)){ $hit = $official }
   }
 
-  $hit = $candidates | Where-Object { Test-Url $_ } | Select-Object -First 1
   if($hit -match 'npmmirror'){ return 'https://registry.npmmirror.com' }
   if($hit -match 'tencent'){ return 'https://mirrors.tencent.com/npm' }
   if($hit -match 'huaweicloud'){ return 'https://repo.huaweicloud.com/repository/npm' }

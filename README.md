@@ -120,6 +120,10 @@ Installer prints a single final route on every run:
 - 没开代理且在国外：优先官方源
 - 没开代理且在国内：优先第三方镜像（至少 2 个备选）
 
+Fallback + latency policy / 回退与延迟策略：
+- 官方优先路径下，若官方源不可达，自动回退到可达镜像
+- 镜像路径下，自动选择低延迟可达镜像（npmmirror / 腾讯 / 华为云）
+
 ## Proxy Auto Detection / 代理自动检测
 
 ### WSL2

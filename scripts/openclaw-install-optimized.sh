@@ -245,6 +245,30 @@ select_first_reachable(){
   return 1
 }
 
+select_fastest_reachable(){
+  local outvar="$1"; shift
+  local best_url="" best_ms=999999 ms u
+  mapfile -t cargs < <(curl_common)
+
+  for u in "$@"; do
+    ms="$(curl -I "${cargs[@]}" --max-time 12 -o /dev/null -s -w '%{time_total}' "$u" 2>/dev/null || true)"
+    [[ -z "$ms" ]] && continue
+    ms="${ms%%.*}${ms#*.}"   # rough numeric without dot for compare
+    ms="${ms:0:6}"
+    [[ -z "$ms" ]] && continue
+    if [[ "$ms" =~ ^[0-9]+$ ]] && (( 10#$ms < best_ms )); then
+      best_ms=$((10#$ms))
+      best_url="$u"
+    fi
+  done
+
+  if [[ -n "$best_url" ]]; then
+    printf -v "$outvar" '%s' "$best_url"
+    return 0
+  fi
+  return 1
+}
+
 network_report(){
   log "Network resource check"
   local endpoints=(
@@ -368,19 +392,26 @@ ensure_node22_macos(){
 configure_npm_registry(){
   if [[ -z "$NPM_REGISTRY" ]]; then
     local chosen=""
-    if [[ "$ROUTE" == "CN_MIRROR" ]]; then
-      select_first_reachable chosen \
-        "https://registry.npmmirror.com/openclaw" \
-        "https://mirrors.tencent.com/npm/openclaw" \
-        "https://repo.huaweicloud.com/repository/npm/openclaw" \
-        "https://registry.npmjs.org/openclaw" || true
+    local official="https://registry.npmjs.org/openclaw"
+    local m1="https://registry.npmmirror.com/openclaw"
+    local m2="https://mirrors.tencent.com/npm/openclaw"
+    local m3="https://repo.huaweicloud.com/repository/npm/openclaw"
+
+    # Simple policy:
+    # - official-preferred routes: use official first, fallback to fastest mirror
+    # - CN route: use fastest CN mirror, fallback official
+    if [[ "$ROUTE" == "PROXY_OFFICIAL" || "$ROUTE" == "GLOBAL_DIRECT" ]]; then
+      if select_first_reachable chosen "$official"; then
+        :
+      else
+        select_fastest_reachable chosen "$m1" "$m2" "$m3" "$official" || true
+      fi
     else
-      select_first_reachable chosen \
-        "https://registry.npmjs.org/openclaw" \
-        "https://registry.npmmirror.com/openclaw" \
-        "https://mirrors.tencent.com/npm/openclaw" \
-        "https://repo.huaweicloud.com/repository/npm/openclaw" || true
+      if ! select_fastest_reachable chosen "$m1" "$m2" "$m3"; then
+        select_first_reachable chosen "$official" || true
+      fi
     fi
+
     case "$chosen" in
       *npmmirror*) NPM_REGISTRY="https://registry.npmmirror.com" ;;
       *tencent*) NPM_REGISTRY="https://mirrors.tencent.com/npm" ;;
