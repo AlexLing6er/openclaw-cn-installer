@@ -1,15 +1,31 @@
 #requires -Version 5.1
 
-param(
-  [ValidateSet('auto','cn','global')]
-  [string]$Profile = 'auto',
-  [ValidateSet('auto','npm','official')]
-  [string]$InstallMethod = 'auto',
-  [switch]$CheckOnly,
-  [string]$NpmRegistry = '',
-  [int[]]$ProxyPorts = @(10808,7897),
-  [switch]$UseUserNpmPrefix
-)
+$Profile = 'auto'
+$InstallMethod = 'auto'
+$CheckOnly = $false
+$NpmRegistry = ''
+$ProxyPorts = @(10808,7897)
+$UseUserNpmPrefix = $false
+
+for($i=0; $i -lt $args.Count; $i++){
+  $k = "$($args[$i])"
+  switch -Regex ($k) {
+    '^-Profile$' { if($i+1 -lt $args.Count){ $Profile = "$($args[++$i])" } ; continue }
+    '^-InstallMethod$' { if($i+1 -lt $args.Count){ $InstallMethod = "$($args[++$i])" } ; continue }
+    '^-NpmRegistry$' { if($i+1 -lt $args.Count){ $NpmRegistry = "$($args[++$i])" } ; continue }
+    '^-ProxyPorts$' {
+      if($i+1 -lt $args.Count){
+        $ProxyPorts = ("$($args[++$i])" -split ',') | ForEach-Object { $_.Trim() } | Where-Object { $_ } | ForEach-Object { [int]$_ }
+      }
+      continue
+    }
+    '^-CheckOnly$' { $CheckOnly = $true; continue }
+    '^-UseUserNpmPrefix$' { $UseUserNpmPrefix = $true; continue }
+  }
+}
+
+if($Profile -notin @('auto','cn','global')){ $Profile='auto' }
+if($InstallMethod -notin @('auto','npm','official')){ $InstallMethod='auto' }
 
 $ErrorActionPreference = 'Stop'
 $script:RegionHint = 'UNKNOWN'
