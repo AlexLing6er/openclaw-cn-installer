@@ -222,8 +222,9 @@ function Install-OpenClawViaNpm {
   Ok "npm registry: $reg"
 
   # Avoid SSH-only git dependency failures in restricted/corporate/CN networks.
-  git config --global url."https://github.com/".insteadOf ssh://git@github.com/ | Out-Null
-  git config --global url."https://github.com/".insteadOf git@github.com: | Out-Null
+  git config --global --replace-all url."https://github.com/".insteadOf ssh://git@github.com/ | Out-Null
+  git config --global --add         url."https://github.com/".insteadOf git@github.com: | Out-Null
+  git config --global --add         url."https://github.com/".insteadOf ssh://git@github.com | Out-Null
 
   Log 'Installing openclaw via npm'
   try {
@@ -241,9 +242,11 @@ function Install-OpenClawViaNpm {
 
 function Install-OpenClawOfficial {
   Log 'Installing via official script: https://openclaw.ai/install.ps1'
-  $content = Get-Text 'https://openclaw.ai/install.ps1'
-  if(-not $content){ throw 'Failed to download official install script.' }
-  Invoke-Expression $content
+  $tmp = Join-Path $env:TEMP ("openclaw-official-" + [guid]::NewGuid().ToString() + ".ps1")
+  & curl.exe -L --fail --silent --show-error "https://openclaw.ai/install.ps1" -o $tmp
+  if($LASTEXITCODE -ne 0 -or -not (Test-Path $tmp)){ throw 'Failed to download official install script.' }
+  powershell -ExecutionPolicy Bypass -File $tmp
+  Remove-Item $tmp -ErrorAction SilentlyContinue
 }
 
 function Get-RegionHint {
