@@ -1,0 +1,24 @@
+name: Sync Fork Upstream
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "17 2 * * *" # daily UTC
+
+permissions:
+  contents: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Sync fork from upstream
+        uses: tgymnich/fork-sync@v2.1.0
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          owner: ${{ github.repository_owner }}
+          base: main
+          head: main
+
+      - name: Done
+        run: echo "Fork sync completed"
