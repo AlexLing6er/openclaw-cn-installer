@@ -16,6 +16,7 @@ USE_SUDO_NPM="${USE_SUDO_NPM:-1}"
 PRINT_ONLY="${PRINT_ONLY:-0}"
 INSTALL_CHANNEL_PLUGINS="${INSTALL_CHANNEL_PLUGINS:-1}"
 CHECK_ONLY="${CHECK_ONLY:-0}"                       # diagnostics-only, no install changes
+PROFILE="${PROFILE:-auto}"                          # auto|cn|global
 
 # New universal toggles
 AUTO_PROXY="${AUTO_PROXY:-1}"                       # auto-detect proxy on WSL2/macOS
@@ -48,6 +49,7 @@ Env options (base):
   PRINT_ONLY=1                      (only print plan)
   INSTALL_CHANNEL_PLUGINS=1|0       (default: 1)
   CHECK_ONLY=1                      (diagnostics only, no install)
+  PROFILE=auto|cn|global            (default: auto)
 
 Env options (universal/proxy):
   AUTO_PROXY=1|0                    (default: 1)
@@ -57,17 +59,20 @@ Env options (universal/proxy):
   MACOS_DETECT_PROXY=1|0            (default: 1)
 
 Examples:
-  # WSL2 (auto proxy detection)
-  AUTO_PROXY=1 bash openclaw-install-optimized.sh
+  # China-friendly defaults
+  PROFILE=cn bash openclaw-install-optimized.sh
 
-  # macOS (use current system proxy)
+  # Global defaults (no proxy unless already configured)
+  PROFILE=global bash openclaw-install-optimized.sh
+
+  # WSL2/macOS auto-proxy
   AUTO_PROXY=1 bash openclaw-install-optimized.sh
 
   # Linux VPS (usually no proxy; keep simple)
   AUTO_PROXY=0 FORCE_IPV4=1 bash openclaw-install-optimized.sh
 
   # Existing device health/check mode
-  CHECK_ONLY=1 AUTO_PROXY=1 bash openclaw-install-optimized.sh
+  CHECK_ONLY=1 PROFILE=auto bash openclaw-install-optimized.sh
 EOF
 }
 
@@ -239,6 +244,31 @@ macos_auto_proxy() {
   fi
 
   log "No macOS system proxy enabled on service: ${service}"
+}
+
+apply_profile_defaults() {
+  case "$PROFILE" in
+    cn)
+      AUTO_PROXY="1"
+      FORCE_IPV4="1"
+      NODE_USE_ENV_PROXY="1"
+      if [[ -z "$NPM_REGISTRY" ]]; then
+        NPM_REGISTRY="https://registry.npmmirror.com"
+      fi
+      ;;
+    global)
+      if [[ -z "${HTTP_PROXY:-${http_proxy:-}}" && -z "${HTTPS_PROXY:-${https_proxy:-}}" ]]; then
+        AUTO_PROXY="0"
+      fi
+      ;;
+    auto)
+      # keep user-provided env as-is
+      ;;
+    *)
+      warn "Unknown PROFILE=${PROFILE}, fallback to auto"
+      PROFILE="auto"
+      ;;
+  esac
 }
 
 ensure_proxy_behavior_for_node() {
@@ -543,9 +573,10 @@ main() {
   need_cmd bash
   need_cmd curl
   detect_platform
+  apply_profile_defaults
 
   log "OpenClaw universal installer"
-  log "Plan: version=${OPENCLAW_VERSION}, force_ipv4=${FORCE_IPV4}, sudo_npm=${USE_SUDO_NPM}, auto_proxy=${AUTO_PROXY}, check_only=${CHECK_ONLY}"
+  log "Plan: profile=${PROFILE}, version=${OPENCLAW_VERSION}, force_ipv4=${FORCE_IPV4}, sudo_npm=${USE_SUDO_NPM}, auto_proxy=${AUTO_PROXY}, check_only=${CHECK_ONLY}"
   log "WSL proxy candidate ports: ${WSL_PROXY_PORT_CANDIDATES}"
 
   if [[ "$PRINT_ONLY" == "1" ]]; then
