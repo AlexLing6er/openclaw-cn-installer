@@ -46,6 +46,20 @@ Universal OpenClaw installer for Windows/WSL2/macOS/Linux with CN+Global profile
 - 海外 Win/macOS/Linux：用 `PROFILE=global`
 - 不确定环境：先跑 `CHECK_ONLY=1`
 
+## One-line to OpenClaw Onboarding / 一键直达 Onboarding
+
+### Linux / WSL2 / macOS
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/AlexLing6er/openclaw-cn-installer/main/scripts/openclaw-install-optimized.sh | PROFILE=auto bash && openclaw onboard --install-daemon
+```
+
+### Windows (Admin PowerShell)
+
+```powershell
+iwr https://raw.githubusercontent.com/AlexLing6er/openclaw-cn-installer/main/scripts/openclaw-install-optimized.ps1 -OutFile .\openclaw-install-optimized.ps1; powershell -ExecutionPolicy Bypass -File .\openclaw-install-optimized.ps1 -Profile auto -InstallMethod auto; openclaw onboard --install-daemon
+```
+
 ## One-line Install / 一键安装
 
 ### Linux / WSL2 / macOS
@@ -212,7 +226,7 @@ WSL_PROXY_PORT_CANDIDATES=10810,7897 PROFILE=cn bash scripts/openclaw-install-op
 NPM_REGISTRY=https://registry.npmmirror.com PROFILE=cn bash scripts/openclaw-install-optimized.sh
 ```
 
-### 3) 想完全不改系统先看检测结果
+### 4) 想完全不改系统先看检测结果
 
 ```bash
 CHECK_ONLY=1 PROFILE=auto bash scripts/openclaw-install-optimized.sh
