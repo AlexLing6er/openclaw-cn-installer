@@ -32,10 +32,10 @@ warn(){ printf "\033[33m[WARN]\033[0m %s\n" "$*"; }
 err(){ printf "\033[31m[ERR ]\033[0m %s\n" "$*"; }
 
 show_credit(){
-  printf "\n\033[35m%s\033[0m\n" "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-  printf "\033[35m%s\033[0m\n" "By 逗号"
-  printf "\033[35m%s\033[0m\n" "博客: https://www.youdiandou.store"
-  printf "\033[35m%s\033[0m\n\n" "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+  printf "\n\033[35m%s\033[0m\n" "========================================"
+  printf "\033[35m%s\033[0m\n" "By Douhao / 作者：逗号"
+  printf "\033[35m%s\033[0m\n" "Blog / 博客: https://www.youdiandou.store"
+  printf "\033[35m%s\033[0m\n\n" "========================================"
 }
 
 usage(){
@@ -501,7 +501,10 @@ main(){
   install_plugins
 
   ok "Done"
-  echo "Run: openclaw onboard --install-daemon"
+  printf "\n\033[1;32m%s\033[0m\n" "========================================"
+  printf "\033[1;32m%s\033[0m\n" "NEXT STEP / 下一步（必须执行）"
+  printf "\033[1;33m%s\033[0m\n" "openclaw onboard --install-daemon"
+  printf "\033[1;32m%s\033[0m\n\n" "========================================"
 }
 
 main "$@"

@@ -319,8 +319,8 @@ Use in GitHub:
 
 ## Author / 作者
 
-- By 逗号
-- 博客：https://www.youdiandou.store
+- By Douhao / 作者：逗号
+- Blog / 博客：https://www.youdiandou.store
 
 ## Repository Layout / 仓库文件说明
 
