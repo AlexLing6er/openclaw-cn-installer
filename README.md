@@ -6,6 +6,17 @@ Universal OpenClaw installer for **Windows / WSL2 / macOS / Linux** with CN+Glob
 
 ---
 
+## Quick Navigation / 快速导航
+
+- [One-line to OpenClaw Onboarding / 一键直达 Onboarding](#one-line-to-openclaw-onboarding--一键直达-onboarding)
+- [One-line Install / 一键安装](#one-line-install--一键安装)
+- [Deterministic Route Decision / 确定性安装路由](#deterministic-route-decision--确定性安装路由)
+- [Troubleshooting / 常见问题快速修复](#troubleshooting-copypaste--常见问题快速修复)
+- [Post Install / 安装后](#post-install--安装后)
+- [Repository Layout / 仓库文件说明](#repository-layout--仓库文件说明)
+
+---
+
 ## About (GitHub Description 推荐)
 
 **EN**
@@ -271,6 +282,16 @@ Use in GitHub:
 
 - By 逗号
 - 博客：https://www.youdiandou.store
+
+## Repository Layout / 仓库文件说明
+
+- `README.md`：主文档（使用说明、命令、故障排查）
+- `ABOUT.md`：GitHub About 建议文案（Description/Topics 可直接复制）
+- `SECURITY.md`：安全与隐私说明（防泄露建议）
+- `scripts/openclaw-install-optimized.sh`：Linux / WSL2 / macOS 安装脚本
+- `scripts/openclaw-install-optimized.ps1`：Windows PowerShell 安装脚本
+- `.github/workflows/sync-upstream.yml`：Fork 自动同步 workflow
+- `.gitignore`：敏感/本地文件忽略规则
 
 ## Security Note / 安全说明
 
