@@ -342,6 +342,42 @@ install_prereqs_macos(){
   need_cmd curl
 }
 
+ensure_cmake_compat_linux(){
+  [[ "$OS_KIND" == "linux" ]] || return 0
+  command -v cmake >/dev/null 2>&1 || return 0
+
+  local cur="$(cmake --version 2>/dev/null | awk 'NR==1{print $3}')"
+  [[ -n "$cur" ]] || return 0
+
+  if dpkg --compare-versions "$cur" ge "3.19"; then
+    ok "CMake OK: $cur"
+    return 0
+  fi
+
+  warn "CMake is too old: $cur (<3.19). Trying upgrade for compatibility..."
+
+  # Ubuntu 20.04 (focal) often ships 3.16.x; add Kitware repo for newer CMake.
+  if [[ -f /etc/os-release ]]; then
+    . /etc/os-release
+    if [[ "${ID:-}" == "ubuntu" && "${VERSION_CODENAME:-}" == "focal" ]]; then
+      sudo_run apt-get -o Acquire::ForceIPv4="$FORCE_IPV4" install -y software-properties-common gpg wget ca-certificates
+      if [[ ! -f /usr/share/keyrings/kitware-archive-keyring.gpg ]]; then
+        run bash -c "wget -O - https://apt.kitware.com/keys/kitware-archive-latest.asc | gpg --dearmor > /usr/share/keyrings/kitware-archive-keyring.gpg"
+      fi
+      echo "deb [signed-by=/usr/share/keyrings/kitware-archive-keyring.gpg] https://apt.kitware.com/ubuntu/ focal main" | sudo_run tee /etc/apt/sources.list.d/kitware.list >/dev/null
+      sudo_run apt-get -o Acquire::ForceIPv4="$FORCE_IPV4" update
+      sudo_run apt-get -o Acquire::ForceIPv4="$FORCE_IPV4" install -y cmake
+    fi
+  fi
+
+  cur="$(cmake --version 2>/dev/null | awk 'NR==1{print $3}')"
+  if [[ -n "$cur" ]] && dpkg --compare-versions "$cur" ge "3.19"; then
+    ok "CMake upgraded: $cur"
+  else
+    warn "CMake is still <3.19; npm install may fail on node-llama-cpp builds"
+  fi
+}
+
 ensure_node22_linux(){
   [[ "$OS_KIND" == "linux" ]] || return 0
   if command -v node >/dev/null 2>&1 && [[ "$(node -p 'process.versions.node.split(".")[0]')" -ge 22 ]]; then ok "Node OK: $(node -v)"; return 0; fi
@@ -496,6 +532,7 @@ main(){
   install_prereqs_macos
   ensure_node22_linux
   ensure_node22_macos
+  ensure_cmake_compat_linux
   configure_npm_registry
   install_openclaw
   install_plugins

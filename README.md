@@ -64,6 +64,9 @@ openclaw onboard --install-daemon
 - 没代理 + 国外：优先官方源
 - 没代理 + 国内：优先镜像源
 
+### Linux 兼容补充
+- 脚本会检测 CMake 版本；若低于 3.19（如 Ubuntu 20.04 常见 3.16），会尝试自动升级以避免 `node-llama-cpp` 构建失败。
+
 ### 安全说明
 - 脚本目标是安装 OpenClaw，不改防火墙/SSH/系统关键服务。
 - 如果只想先看不改动（Linux/macOS/WSL2）：
