@@ -12,11 +12,14 @@ Blog / 博客: https://www.youdiandou.store
 ```bash
 curl -fsSL "https://raw.githubusercontent.com/AlexLing6er/openclaw-cn-installer/main/scripts/openclaw-install-optimized.sh" | PROFILE=auto bash
 openclaw onboard --install-daemon
+openclaw --version
 ```
 
 ---
 
 ## Windows 运行什么？
+
+> 建议使用**管理员 PowerShell**执行。
 
 ### PowerShell（推荐）
 
@@ -24,6 +27,7 @@ openclaw onboard --install-daemon
 curl.exe -L "https://raw.githubusercontent.com/AlexLing6er/openclaw-cn-installer/main/scripts/openclaw-install-optimized.ps1" -o .\openclaw-install-optimized.ps1
 powershell -ExecutionPolicy Bypass -File .\openclaw-install-optimized.ps1 -Profile auto -InstallMethod auto
 openclaw onboard --install-daemon
+openclaw --version
 ```
 
 ### CMD（备用）
@@ -31,6 +35,7 @@ openclaw onboard --install-daemon
 ```cmd
 powershell -ExecutionPolicy Bypass -Command "curl.exe -L https://raw.githubusercontent.com/AlexLing6er/openclaw-cn-installer/main/scripts/openclaw-install-optimized.ps1 -o openclaw-install-optimized.ps1 && powershell -ExecutionPolicy Bypass -File .\openclaw-install-optimized.ps1 -Profile auto -InstallMethod auto"
 openclaw onboard --install-daemon
+openclaw --version
 ```
 
 ---
@@ -57,6 +62,19 @@ powershell -ExecutionPolicy Bypass -File .\openclaw-install-optimized.ps1 -Profi
 ```powershell
 iwr -useb https://openclaw.ai/install.ps1 | iex
 openclaw onboard --install-daemon
+```
+
+### 安装常用插件（可选）
+
+```bash
+# 飞书
+openclaw plugins install @m1heng-clawd/feishu
+
+# 企业微信
+openclaw plugins install @wecom/wecom-openclaw-plugin
+
+# 钉钉
+openclaw plugins install @dingtalk-real-ai/dingtalk-connector
 ```
 
 ### 路由逻辑（自动）
