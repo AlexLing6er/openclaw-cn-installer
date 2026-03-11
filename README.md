@@ -18,6 +18,13 @@ Universal OpenClaw installer for Windows/WSL2/macOS/Linux with CN+Global profile
 
 ## Supported Scenarios / 适用场景
 
+> Note: Linux auto Node installation currently targets Debian/Ubuntu (`apt`).
+> On other distros, preinstall Node.js 22+ before running this installer.
+>
+> 说明：Linux 自动安装 Node 目前主要针对 Debian/Ubuntu（`apt`）。
+> 其他发行版请先手动安装 Node.js 22+。
+
+
 - CN Windows users (PowerShell) / 国内 Windows 用户（PowerShell）
 - CN Windows + WSL2 users (v2ray/clash/custom port) / 国内 WSL2（10808/7897/自定义）
 - CN macOS users (Apple Silicon + Intel) / 国内 macOS（ARM + Intel）

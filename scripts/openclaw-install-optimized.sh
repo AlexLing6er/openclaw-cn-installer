@@ -239,11 +239,41 @@ network_report(){
 
 install_prereqs_linux(){
   [[ "$OS_KIND" == "linux" ]] || return 0
-  sudo_run apt-get -o Acquire::ForceIPv4="$FORCE_IPV4" -o DPkg::Lock::Timeout=60 update
-  sudo_run apt-get -o Acquire::ForceIPv4="$FORCE_IPV4" -o DPkg::Lock::Timeout=60 install -y ca-certificates curl gnupg netcat-openbsd
-  if [[ "$SKIP_BUILD_TOOLS" != "1" ]]; then
-    sudo_run apt-get -o Acquire::ForceIPv4="$FORCE_IPV4" install -y build-essential python3 make g++ cmake
+
+  if command -v apt-get >/dev/null 2>&1; then
+    sudo_run apt-get -o Acquire::ForceIPv4="$FORCE_IPV4" -o DPkg::Lock::Timeout=60 update
+    sudo_run apt-get -o Acquire::ForceIPv4="$FORCE_IPV4" -o DPkg::Lock::Timeout=60 install -y ca-certificates curl gnupg netcat-openbsd
+    if [[ "$SKIP_BUILD_TOOLS" != "1" ]]; then
+      sudo_run apt-get -o Acquire::ForceIPv4="$FORCE_IPV4" install -y build-essential python3 make g++ cmake
+    fi
+    return 0
   fi
+
+  if command -v dnf >/dev/null 2>&1; then
+    sudo_run bash -c 'dnf install -y ca-certificates curl nmap-ncat || dnf install -y ca-certificates curl netcat'
+    [[ "$SKIP_BUILD_TOOLS" != "1" ]] && sudo_run dnf groupinstall -y "Development Tools" || true
+    return 0
+  fi
+
+  if command -v yum >/dev/null 2>&1; then
+    sudo_run bash -c 'yum install -y ca-certificates curl nmap-ncat || yum install -y ca-certificates curl nc'
+    [[ "$SKIP_BUILD_TOOLS" != "1" ]] && sudo_run yum groupinstall -y "Development Tools" || true
+    return 0
+  fi
+
+  if command -v pacman >/dev/null 2>&1; then
+    sudo_run pacman -Sy --noconfirm ca-certificates curl gnu-netcat
+    [[ "$SKIP_BUILD_TOOLS" != "1" ]] && sudo_run pacman -Sy --noconfirm base-devel python cmake || true
+    return 0
+  fi
+
+  if command -v zypper >/dev/null 2>&1; then
+    sudo_run zypper --non-interactive install ca-certificates curl netcat-openbsd
+    [[ "$SKIP_BUILD_TOOLS" != "1" ]] && sudo_run zypper --non-interactive install -t pattern devel_basis || true
+    return 0
+  fi
+
+  warn "Unknown Linux package manager. Please ensure curl/node/npm are installed manually."
 }
 
 install_prereqs_macos(){
@@ -254,6 +284,12 @@ install_prereqs_macos(){
 ensure_node22_linux(){
   [[ "$OS_KIND" == "linux" ]] || return 0
   if command -v node >/dev/null 2>&1 && [[ "$(node -p 'process.versions.node.split(".")[0]')" -ge 22 ]]; then ok "Node OK: $(node -v)"; return 0; fi
+
+  if ! command -v apt-get >/dev/null 2>&1; then
+    err "Node 22+ is required. Auto install currently supports Debian/Ubuntu (apt)."
+    err "Please install Node 22+ manually (for example via nvm or distro package manager), then rerun."
+    exit 1
+  fi
 
   local setup_url
   if [[ "$ROUTE" == "CN_MIRROR" ]]; then
@@ -275,6 +311,7 @@ ensure_node22_linux(){
   sudo_run bash "$tmp"
   rm -f "$tmp"
   sudo_run apt-get -o Acquire::ForceIPv4="$FORCE_IPV4" install -y nodejs
+  command -v node >/dev/null 2>&1 || { err "Node install finished but node command not found"; exit 1; }
   ok "Node installed: $(node -v)"
 }
 
@@ -292,6 +329,9 @@ ensure_node22_macos(){
   brew install node@22 || brew upgrade node@22 || true
   if [[ -d /opt/homebrew/opt/node@22/bin ]]; then export PATH="/opt/homebrew/opt/node@22/bin:$PATH"; fi
   if [[ -d /usr/local/opt/node@22/bin ]]; then export PATH="/usr/local/opt/node@22/bin:$PATH"; fi
+
+  command -v node >/dev/null 2>&1 || { err "Node install finished but node command not found in PATH"; exit 1; }
+  [[ "$(node -p 'process.versions.node.split(".")[0]')" -ge 22 ]] || { err "Node version is still <22: $(node -v)"; exit 1; }
   ok "Node installed: $(node -v)"
 }
 

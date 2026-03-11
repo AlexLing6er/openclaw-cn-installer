@@ -42,7 +42,10 @@ function Get-WindowsProxy {
   try {
     $proxy = (netsh winhttp show proxy | Out-String)
     if($proxy -match 'Proxy Server\(s\)\s*:\s*(.+)'){
-      return $Matches[1].Trim()
+      $raw = $Matches[1].Trim()
+      if($raw -match '([a-z]+)=([^;\s]+)'){ $raw = $Matches[2] }
+      if($raw -notmatch '^https?://'){ $raw = "http://$raw" }
+      return $raw
     }
   } catch {}
   return ''
@@ -87,6 +90,10 @@ function Ensure-Node22 {
 
   Log 'Installing Node.js LTS via winget'
   Invoke-WithRetry { winget install OpenJS.NodeJS.LTS --accept-package-agreements --accept-source-agreements --silent | Out-Null }
+
+  $env:Path = [System.Environment]::GetEnvironmentVariable('Path','Machine') + ';' + [System.Environment]::GetEnvironmentVariable('Path','User')
+  $nodeCheck = Get-Command node -ErrorAction SilentlyContinue
+  if(-not $nodeCheck){ throw 'Node install completed but node is not in PATH. Open a new PowerShell and rerun.' }
 }
 
 function Select-NpmRegistry {
@@ -132,10 +139,13 @@ function Install-OpenClawViaNpm {
   npm config set registry $reg | Out-Null
   Ok "npm registry: $reg"
 
+  if($UseUserNpmPrefix){ Setup-UserNpmPrefix }
+
   Log 'Installing openclaw via npm'
   try {
     Invoke-WithRetry { npm install -g openclaw --no-fund --no-audit }
   } catch {
+    if($UseUserNpmPrefix){ throw }
     Warn "Global npm install failed, trying user prefix fallback..."
     Setup-UserNpmPrefix
     Invoke-WithRetry { npm install -g openclaw --no-fund --no-audit }
