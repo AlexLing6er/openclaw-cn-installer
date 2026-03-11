@@ -15,10 +15,11 @@ SKIP_BUILD_TOOLS="${SKIP_BUILD_TOOLS:-0}"
 USE_SUDO_NPM="${USE_SUDO_NPM:-1}"
 PRINT_ONLY="${PRINT_ONLY:-0}"
 INSTALL_CHANNEL_PLUGINS="${INSTALL_CHANNEL_PLUGINS:-1}"
+CHECK_ONLY="${CHECK_ONLY:-0}"                       # diagnostics-only, no install changes
 
 # New universal toggles
 AUTO_PROXY="${AUTO_PROXY:-1}"                       # auto-detect proxy on WSL2/macOS
-WSL_PROXY_PORT="${WSL_PROXY_PORT:-10808}"           # common Clash/V2Ray port on Windows host
+WSL_PROXY_PORT_CANDIDATES="${WSL_PROXY_PORT_CANDIDATES:-10808,7897}" # v2ray/clash verge common ports
 WSL_DETECT_HOST_PROXY="${WSL_DETECT_HOST_PROXY:-1}" # probe Windows host IP from resolv.conf
 MACOS_DETECT_PROXY="${MACOS_DETECT_PROXY:-1}"       # read macOS system proxy via scutil/networksetup
 NODE_USE_ENV_PROXY="${NODE_USE_ENV_PROXY:-1}"       # fix Node/undici not reading proxy by default
@@ -46,11 +47,12 @@ Env options (base):
   USE_SUDO_NPM=1|0                  (default: 1)
   PRINT_ONLY=1                      (only print plan)
   INSTALL_CHANNEL_PLUGINS=1|0       (default: 1)
+  CHECK_ONLY=1                      (diagnostics only, no install)
 
 Env options (universal/proxy):
   AUTO_PROXY=1|0                    (default: 1)
   NODE_USE_ENV_PROXY=1|0            (default: 1)
-  WSL_PROXY_PORT=10808              (default: 10808)
+  WSL_PROXY_PORT_CANDIDATES=10808,7897 (default)
   WSL_DETECT_HOST_PROXY=1|0         (default: 1)
   MACOS_DETECT_PROXY=1|0            (default: 1)
 
@@ -63,6 +65,9 @@ Examples:
 
   # Linux VPS (usually no proxy; keep simple)
   AUTO_PROXY=0 FORCE_IPV4=1 bash openclaw-install-optimized.sh
+
+  # Existing device health/check mode
+  CHECK_ONLY=1 AUTO_PROXY=1 bash openclaw-install-optimized.sh
 EOF
 }
 
@@ -142,33 +147,57 @@ set_proxy_exports() {
   ok "Proxy exported: $proxy_url"
 }
 
+tcp_probe() {
+  local host="$1" port="$2"
+  if command -v nc >/dev/null 2>&1; then
+    nc -zw2 "$host" "$port" >/dev/null 2>&1
+  else
+    (echo >/dev/tcp/"$host"/"$port") >/dev/null 2>&1
+  fi
+}
+
 wsl_auto_proxy() {
   [[ "$IS_WSL" -eq 1 ]] || return 0
   [[ "$AUTO_PROXY" == "1" && "$WSL_DETECT_HOST_PROXY" == "1" ]] || return 0
 
+  # Keep existing proxy if already reachable.
+  local cur_proxy hostport cur_host cur_port
+  cur_proxy="${HTTPS_PROXY:-${https_proxy:-}}"
+  if [[ -n "$cur_proxy" ]]; then
+    hostport="${cur_proxy#*://}"
+    hostport="${hostport%%/*}"
+    cur_host="${hostport%%:*}"
+    cur_port="${hostport##*:}"
+    if [[ -n "$cur_host" && -n "$cur_port" ]] && tcp_probe "$cur_host" "$cur_port"; then
+      ok "Existing proxy is reachable in WSL: ${cur_proxy}"
+      return 0
+    fi
+  fi
+
   local win_ip
   win_ip="$(awk '/nameserver/ {print $2; exit}' /etc/resolv.conf 2>/dev/null || true)"
 
-  if [[ -z "$win_ip" ]]; then
-    warn "WSL host IP auto-detect failed; skip auto proxy"
-    return 0
-  fi
+  local hosts=()
+  hosts+=("127.0.0.1")
+  [[ -n "$win_ip" ]] && hosts+=("$win_ip")
 
-  # Probe host proxy port first; if unreachable, keep current env untouched.
-  if command -v nc >/dev/null 2>&1; then
-    if nc -zw2 "$win_ip" "$WSL_PROXY_PORT" >/dev/null 2>&1; then
-      set_proxy_exports "http://${win_ip}:${WSL_PROXY_PORT}"
-      return 0
-    fi
-  else
-    # fallback probe with bash /dev/tcp (best effort)
-    if (echo >/dev/tcp/"$win_ip"/"$WSL_PROXY_PORT") >/dev/null 2>&1; then
-      set_proxy_exports "http://${win_ip}:${WSL_PROXY_PORT}"
-      return 0
-    fi
-  fi
+  local ports_csv="$WSL_PROXY_PORT_CANDIDATES"
+  local IFS=','
+  local ports=($ports_csv)
 
-  warn "WSL host proxy ${win_ip}:${WSL_PROXY_PORT} not reachable; keeping existing proxy env"
+  local h p
+  for h in "${hosts[@]}"; do
+    for p in "${ports[@]}"; do
+      p="${p// /}"
+      [[ -n "$p" ]] || continue
+      if tcp_probe "$h" "$p"; then
+        set_proxy_exports "http://${h}:${p}"
+        return 0
+      fi
+    done
+  done
+
+  warn "No reachable WSL proxy found (hosts=${hosts[*]}, ports=${WSL_PROXY_PORT_CANDIDATES}); keeping existing proxy env"
 }
 
 macos_active_network_service() {
@@ -220,7 +249,7 @@ ensure_proxy_behavior_for_node() {
 }
 
 curl_base_args() {
-  local args=(--connect-timeout 15 --max-time 180 --retry 3 --retry-delay 1 --retry-connrefused)
+  local args=(--proto '=https' --tlsv1.2 --connect-timeout 15 --max-time 180 --retry 3 --retry-delay 1 --retry-connrefused)
   if [[ "$FORCE_IPV4" == "1" ]]; then
     args=(-4 "${args[@]}")
   fi
@@ -250,6 +279,36 @@ network_probe() {
       warn "Unreachable now: $u"
     fi
   done
+}
+
+run_check_only() {
+  log "Running compatibility checks only (no install changes)"
+  echo "  - OS:       ${OS_KIND} (wsl=${IS_WSL})"
+  echo "  - PKG:      ${PKG_KIND}"
+  echo "  - Proxy:    ${HTTPS_PROXY:-${https_proxy:-<not set>}}"
+  echo "  - Node:     $(node -v 2>/dev/null || echo missing)"
+  echo "  - npm:      $(npm -v 2>/dev/null || echo missing)"
+  echo "  - openclaw: $(openclaw --version 2>/dev/null || echo not installed)"
+
+  network_probe
+
+  if command -v node >/dev/null 2>&1; then
+    if node -e "fetch('https://auth.openai.com/oauth/authorize').then(r=>console.log('node-fetch-ok',r.status)).catch(e=>{console.error('node-fetch-fail',e.message);process.exit(1)})"; then
+      ok "Node fetch path to OpenAI auth is working"
+    else
+      warn "Node fetch path to OpenAI auth failed (likely proxy/cert issue)"
+    fi
+  else
+    warn "Node not installed yet; skip Node fetch probe"
+  fi
+
+  if command -v openclaw >/dev/null 2>&1; then
+    log "OpenClaw quick checks"
+    openclaw --version || true
+    openclaw models status --plain || true
+  fi
+
+  ok "Check-only mode complete"
 }
 
 apt_update() {
@@ -486,7 +545,8 @@ main() {
   detect_platform
 
   log "OpenClaw universal installer"
-  log "Plan: version=${OPENCLAW_VERSION}, force_ipv4=${FORCE_IPV4}, sudo_npm=${USE_SUDO_NPM}, auto_proxy=${AUTO_PROXY}"
+  log "Plan: version=${OPENCLAW_VERSION}, force_ipv4=${FORCE_IPV4}, sudo_npm=${USE_SUDO_NPM}, auto_proxy=${AUTO_PROXY}, check_only=${CHECK_ONLY}"
+  log "WSL proxy candidate ports: ${WSL_PROXY_PORT_CANDIDATES}"
 
   if [[ "$PRINT_ONLY" == "1" ]]; then
     usage
@@ -496,6 +556,11 @@ main() {
   ensure_proxy_behavior_for_node
   wsl_auto_proxy
   macos_auto_proxy
+
+  if [[ "$CHECK_ONLY" == "1" ]]; then
+    run_check_only
+    exit 0
+  fi
 
   network_probe
   install_prereqs_linux
