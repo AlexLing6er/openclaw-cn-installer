@@ -362,7 +362,7 @@ ensure_cmake_compat_linux(){
     if [[ "${ID:-}" == "ubuntu" && "${VERSION_CODENAME:-}" == "focal" ]]; then
       sudo_run apt-get -o Acquire::ForceIPv4="$FORCE_IPV4" install -y software-properties-common gpg wget ca-certificates
       if [[ ! -f /usr/share/keyrings/kitware-archive-keyring.gpg ]]; then
-        run bash -c "wget -O - https://apt.kitware.com/keys/kitware-archive-latest.asc | gpg --dearmor > /usr/share/keyrings/kitware-archive-keyring.gpg"
+        sudo_run bash -c "wget -O - https://apt.kitware.com/keys/kitware-archive-latest.asc | gpg --dearmor > /usr/share/keyrings/kitware-archive-keyring.gpg"
       fi
       echo "deb [signed-by=/usr/share/keyrings/kitware-archive-keyring.gpg] https://apt.kitware.com/ubuntu/ focal main" | sudo_run tee /etc/apt/sources.list.d/kitware.list >/dev/null
       sudo_run apt-get -o Acquire::ForceIPv4="$FORCE_IPV4" update
