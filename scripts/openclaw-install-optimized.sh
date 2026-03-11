@@ -1,13 +1,12 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-# OpenClaw Installer (optimized for Linux/WSL)
-# Improvements vs upstream installer:
-# - clear, real-time logs (no silent -qq apt steps)
-# - explicit step boundaries + endpoint probes
-# - retry/timeout for network-heavy operations
-# - better error messages and safer defaults for WSL/CN networks
-# - optional user-scope npm install (no sudo npm)
+# OpenClaw Universal Installer (WSL2 Ubuntu/Debian + macOS + Linux VPS)
+# Goals:
+# - one script for common environments
+# - dynamic proxy detection for WSL2 + macOS
+# - keep Linux VPS path simple/safe (no forced proxy magic)
+# - better retries/timeouts + diagnostics
 
 OPENCLAW_VERSION="${OPENCLAW_VERSION:-latest}"
 FORCE_IPV4="${FORCE_IPV4:-1}"
@@ -17,17 +16,29 @@ USE_SUDO_NPM="${USE_SUDO_NPM:-1}"
 PRINT_ONLY="${PRINT_ONLY:-0}"
 INSTALL_CHANNEL_PLUGINS="${INSTALL_CHANNEL_PLUGINS:-1}"
 
+# New universal toggles
+AUTO_PROXY="${AUTO_PROXY:-1}"                       # auto-detect proxy on WSL2/macOS
+WSL_PROXY_PORT="${WSL_PROXY_PORT:-10808}"           # common Clash/V2Ray port on Windows host
+WSL_DETECT_HOST_PROXY="${WSL_DETECT_HOST_PROXY:-1}" # probe Windows host IP from resolv.conf
+MACOS_DETECT_PROXY="${MACOS_DETECT_PROXY:-1}"       # read macOS system proxy via scutil/networksetup
+NODE_USE_ENV_PROXY="${NODE_USE_ENV_PROXY:-1}"       # fix Node/undici not reading proxy by default
+DEBIAN_FRONTEND="${DEBIAN_FRONTEND:-noninteractive}"
+
 log()  { printf "\033[36m[INFO]\033[0m %s\n" "$*"; }
 ok()   { printf "\033[32m[ OK ]\033[0m %s\n" "$*"; }
 warn() { printf "\033[33m[WARN]\033[0m %s\n" "$*"; }
 err()  { printf "\033[31m[ERR ]\033[0m %s\n" "$*"; }
+
+OS_KIND=""
+PKG_KIND=""
+IS_WSL=0
 
 usage() {
   cat <<'EOF'
 Usage:
   bash openclaw-install-optimized.sh
 
-Env options:
+Env options (base):
   OPENCLAW_VERSION=latest|x.y.z     (default: latest)
   FORCE_IPV4=1|0                    (default: 1)
   NPM_REGISTRY=https://...          (optional)
@@ -36,16 +47,34 @@ Env options:
   PRINT_ONLY=1                      (only print plan)
   INSTALL_CHANNEL_PLUGINS=1|0       (default: 1)
 
+Env options (universal/proxy):
+  AUTO_PROXY=1|0                    (default: 1)
+  NODE_USE_ENV_PROXY=1|0            (default: 1)
+  WSL_PROXY_PORT=10808              (default: 10808)
+  WSL_DETECT_HOST_PROXY=1|0         (default: 1)
+  MACOS_DETECT_PROXY=1|0            (default: 1)
+
 Examples:
-  NPM_REGISTRY=https://registry.npmmirror.com FORCE_IPV4=1 bash openclaw-install-optimized.sh
-  USE_SUDO_NPM=0 bash openclaw-install-optimized.sh
+  # WSL2 (auto proxy detection)
+  AUTO_PROXY=1 bash openclaw-install-optimized.sh
+
+  # macOS (use current system proxy)
+  AUTO_PROXY=1 bash openclaw-install-optimized.sh
+
+  # Linux VPS (usually no proxy; keep simple)
+  AUTO_PROXY=0 FORCE_IPV4=1 bash openclaw-install-optimized.sh
 EOF
 }
 
 on_error() {
   local exit_code=$?
   err "Failed at line $1 (exit=${exit_code})."
-  err "Hints: FORCE_IPV4=1, set NPM_REGISTRY, or rerun with USE_SUDO_NPM=0."
+  err "Diagnostics:"
+  err "  - OS_KIND=${OS_KIND:-unknown}, PKG_KIND=${PKG_KIND:-unknown}, IS_WSL=${IS_WSL}"
+  err "  - node=$(node -v 2>/dev/null || echo missing), npm=$(npm -v 2>/dev/null || echo missing)"
+  err "  - HTTP_PROXY=${HTTP_PROXY:-${http_proxy:-<empty>}}"
+  err "  - HTTPS_PROXY=${HTTPS_PROXY:-${https_proxy:-<empty>}}"
+  err "Hints: AUTO_PROXY=1, FORCE_IPV4=1, set NPM_REGISTRY, or USE_SUDO_NPM=0."
   exit "$exit_code"
 }
 trap 'on_error ${LINENO}' ERR
@@ -67,40 +96,141 @@ sudo_run() {
   if [[ "$(id -u)" -eq 0 ]]; then
     run "$@"
   else
-    have_sudo || { err "sudo is required for apt operations"; exit 1; }
+    have_sudo || { err "sudo is required for this operation"; exit 1; }
     run sudo "$@"
   fi
 }
 
-check_platform() {
-  [[ "${OSTYPE:-}" == linux* ]] || { err "This script targets Linux/WSL only."; exit 1; }
-  command -v apt-get >/dev/null 2>&1 || { err "Only apt-based distros are supported in this script."; exit 1; }
-  if grep -qi microsoft /proc/version 2>/dev/null; then
-    ok "WSL detected"
+detect_platform() {
+  case "$(uname -s)" in
+    Linux)
+      OS_KIND="linux"
+      if grep -qi microsoft /proc/version 2>/dev/null; then
+        IS_WSL=1
+        ok "WSL detected"
+      else
+        log "Native Linux detected"
+      fi
+      if command -v apt-get >/dev/null 2>&1; then
+        PKG_KIND="apt"
+      else
+        PKG_KIND="none"
+      fi
+      ;;
+    Darwin)
+      OS_KIND="macos"
+      PKG_KIND="brew"
+      log "macOS detected"
+      ;;
+    *)
+      err "Unsupported OS: $(uname -s). Supported: Linux (WSL/native), macOS"
+      exit 1
+      ;;
+  esac
+}
+
+set_proxy_exports() {
+  local proxy_url="$1"
+  export HTTP_PROXY="$proxy_url"
+  export HTTPS_PROXY="$proxy_url"
+  export ALL_PROXY="$proxy_url"
+  export http_proxy="$proxy_url"
+  export https_proxy="$proxy_url"
+  export all_proxy="$proxy_url"
+  export NO_PROXY="${NO_PROXY:-127.0.0.1,localhost}"
+  export no_proxy="${no_proxy:-127.0.0.1,localhost}"
+  ok "Proxy exported: $proxy_url"
+}
+
+wsl_auto_proxy() {
+  [[ "$IS_WSL" -eq 1 ]] || return 0
+  [[ "$AUTO_PROXY" == "1" && "$WSL_DETECT_HOST_PROXY" == "1" ]] || return 0
+
+  local win_ip
+  win_ip="$(awk '/nameserver/ {print $2; exit}' /etc/resolv.conf 2>/dev/null || true)"
+
+  if [[ -z "$win_ip" ]]; then
+    warn "WSL host IP auto-detect failed; skip auto proxy"
+    return 0
+  fi
+
+  # Probe host proxy port first; if unreachable, keep current env untouched.
+  if command -v nc >/dev/null 2>&1; then
+    if nc -zw2 "$win_ip" "$WSL_PROXY_PORT" >/dev/null 2>&1; then
+      set_proxy_exports "http://${win_ip}:${WSL_PROXY_PORT}"
+      return 0
+    fi
   else
-    log "Native Linux detected"
+    # fallback probe with bash /dev/tcp (best effort)
+    if (echo >/dev/tcp/"$win_ip"/"$WSL_PROXY_PORT") >/dev/null 2>&1; then
+      set_proxy_exports "http://${win_ip}:${WSL_PROXY_PORT}"
+      return 0
+    fi
+  fi
+
+  warn "WSL host proxy ${win_ip}:${WSL_PROXY_PORT} not reachable; keeping existing proxy env"
+}
+
+macos_active_network_service() {
+  networksetup -listnetworkserviceorder 2>/dev/null \
+    | awk -F'\) ' '/Hardware Port/ {print $2}' \
+    | sed 's/ (Device:.*//' \
+    | grep -v '^$' \
+    | head -n 1
+}
+
+macos_auto_proxy() {
+  [[ "$OS_KIND" == "macos" ]] || return 0
+  [[ "$AUTO_PROXY" == "1" && "$MACOS_DETECT_PROXY" == "1" ]] || return 0
+
+  local service host port enabled
+  service="$(macos_active_network_service || true)"
+  [[ -n "$service" ]] || { warn "Cannot detect active macOS network service"; return 0; }
+
+  # HTTPS proxy first (preferred for npm/openclaw endpoints)
+  enabled="$(networksetup -getsecurewebproxy "$service" 2>/dev/null | awk '/Enabled:/ {print $2}')"
+  if [[ "$enabled" == "Yes" ]]; then
+    host="$(networksetup -getsecurewebproxy "$service" 2>/dev/null | awk '/Server:/ {print $2}')"
+    port="$(networksetup -getsecurewebproxy "$service" 2>/dev/null | awk '/Port:/ {print $2}')"
+    if [[ -n "$host" && -n "$port" ]]; then
+      set_proxy_exports "http://${host}:${port}"
+      return 0
+    fi
+  fi
+
+  # Fallback to HTTP proxy
+  enabled="$(networksetup -getwebproxy "$service" 2>/dev/null | awk '/Enabled:/ {print $2}')"
+  if [[ "$enabled" == "Yes" ]]; then
+    host="$(networksetup -getwebproxy "$service" 2>/dev/null | awk '/Server:/ {print $2}')"
+    port="$(networksetup -getwebproxy "$service" 2>/dev/null | awk '/Port:/ {print $2}')"
+    if [[ -n "$host" && -n "$port" ]]; then
+      set_proxy_exports "http://${host}:${port}"
+      return 0
+    fi
+  fi
+
+  log "No macOS system proxy enabled on service: ${service}"
+}
+
+ensure_proxy_behavior_for_node() {
+  if [[ "$NODE_USE_ENV_PROXY" == "1" ]]; then
+    export NODE_USE_ENV_PROXY=1
+    log "NODE_USE_ENV_PROXY=1 enabled"
   fi
 }
 
-apt_update() {
+curl_base_args() {
+  local args=(--connect-timeout 15 --max-time 180 --retry 3 --retry-delay 1 --retry-connrefused)
   if [[ "$FORCE_IPV4" == "1" ]]; then
-    sudo_run apt-get -o Acquire::ForceIPv4=true update
-  else
-    sudo_run apt-get update
+    args=(-4 "${args[@]}")
   fi
-}
-
-apt_install() {
-  if [[ "$FORCE_IPV4" == "1" ]]; then
-    sudo_run apt-get -o Acquire::ForceIPv4=true install -y "$@"
-  else
-    sudo_run apt-get install -y "$@"
-  fi
+  printf '%s\n' "${args[@]}"
 }
 
 curl_dl() {
   local url="$1" out="$2"
-  run curl -fsSL --connect-timeout 15 --max-time 180 --retry 3 --retry-delay 1 --retry-connrefused "$url" -o "$out"
+  mapfile -t _cargs < <(curl_base_args)
+  run curl -fsSL "${_cargs[@]}" "$url" -o "$out"
 }
 
 network_probe() {
@@ -110,9 +240,11 @@ network_probe() {
     "https://deb.nodesource.com/setup_22.x"
     "https://registry.npmjs.org/openclaw"
   )
+
+  mapfile -t _cargs < <(curl_base_args)
   local u
   for u in "${urls[@]}"; do
-    if curl -I --connect-timeout 10 --max-time 20 "$u" >/dev/null 2>&1; then
+    if curl -I "${_cargs[@]}" --max-time 20 "$u" >/dev/null 2>&1; then
       ok "Reachable: $u"
     else
       warn "Unreachable now: $u"
@@ -120,29 +252,60 @@ network_probe() {
   done
 }
 
-install_prereqs() {
-  log "[1/5] Installing prerequisites..."
+apt_update() {
+  sudo_run apt-get -o Acquire::ForceIPv4="$FORCE_IPV4" -o DPkg::Lock::Timeout=60 update
+}
+
+apt_install() {
+  sudo_run apt-get -o Acquire::ForceIPv4="$FORCE_IPV4" -o DPkg::Lock::Timeout=60 install -y "$@"
+}
+
+install_prereqs_linux() {
+  [[ "$PKG_KIND" == "apt" ]] || return 0
+  log "[1/6] Installing prerequisites (Linux/apt)..."
   apt_update
-  apt_install ca-certificates curl gnupg
+  apt_install ca-certificates curl gnupg netcat-openbsd
   ok "Prerequisites ready"
+}
+
+install_prereqs_macos() {
+  [[ "$OS_KIND" == "macos" ]] || return 0
+  log "[1/6] Checking prerequisites (macOS)..."
+  need_cmd curl
+  if ! command -v brew >/dev/null 2>&1; then
+    warn "Homebrew not found. Install from https://brew.sh then re-run for managed Node install."
+  fi
+  ok "Prerequisites checked"
 }
 
 install_build_tools() {
   if [[ "$SKIP_BUILD_TOOLS" == "1" ]]; then
-    warn "[2/5] Skipping build tools as requested"
+    warn "[2/6] Skipping build tools as requested"
     return
   fi
-  log "[2/5] Installing build tools (make/g++/cmake/python3)..."
-  apt_install build-essential python3 make g++ cmake
-  ok "Build tools ready"
+
+  if [[ "$PKG_KIND" == "apt" ]]; then
+    log "[2/6] Installing build tools (apt)..."
+    apt_install build-essential python3 make g++ cmake
+    ok "Build tools ready"
+  elif [[ "$OS_KIND" == "macos" ]]; then
+    log "[2/6] Checking Xcode CLI tools (macOS)..."
+    if xcode-select -p >/dev/null 2>&1; then
+      ok "Xcode Command Line Tools already installed"
+    else
+      warn "Xcode CLT not found. Installing..."
+      xcode-select --install || true
+      warn "If macOS popup appears, finish install then rerun script."
+    fi
+  fi
 }
 
 node_major() {
   node -p 'process.versions.node.split(".")[0]' 2>/dev/null || echo 0
 }
 
-install_node22() {
-  log "[3/5] Ensuring Node.js >= 22..."
+install_node22_linux_apt() {
+  log "[3/6] Ensuring Node.js >= 22 (Linux/apt)..."
 
   if command -v node >/dev/null 2>&1; then
     local major
@@ -169,8 +332,50 @@ install_node22() {
   ok "npm installed:  $(npm -v)"
 }
 
+install_node22_macos() {
+  log "[3/6] Ensuring Node.js >= 22 (macOS)..."
+
+  if command -v node >/dev/null 2>&1; then
+    local major
+    major="$(node_major)"
+    if [[ "$major" =~ ^[0-9]+$ ]] && [[ "$major" -ge 22 ]]; then
+      ok "Node already satisfies requirement: $(node -v)"
+      ok "npm version: $(npm -v 2>/dev/null || echo missing)"
+      return
+    fi
+    warn "Existing Node is too old: $(node -v 2>/dev/null || echo unknown)"
+  fi
+
+  if command -v brew >/dev/null 2>&1; then
+    run brew install node@22 || run brew upgrade node@22 || true
+    # Prefer brewed node@22 if not linked globally
+    if [[ -d "/opt/homebrew/opt/node@22/bin" ]]; then
+      export PATH="/opt/homebrew/opt/node@22/bin:$PATH"
+    elif [[ -d "/usr/local/opt/node@22/bin" ]]; then
+      export PATH="/usr/local/opt/node@22/bin:$PATH"
+    fi
+  else
+    err "Homebrew not found, and Node <22. Install brew or Node 22 manually first."
+    exit 1
+  fi
+
+  ok "Node installed/updated: $(node -v)"
+  ok "npm installed:          $(npm -v)"
+}
+
+install_node22() {
+  if [[ "$PKG_KIND" == "apt" ]]; then
+    install_node22_linux_apt
+  elif [[ "$OS_KIND" == "macos" ]]; then
+    install_node22_macos
+  else
+    err "No supported package path for this OS"
+    exit 1
+  fi
+}
+
 configure_npm_registry_if_needed() {
-  log "[4/5] Configuring npm (optional)..."
+  log "[4/6] Configuring npm (optional)..."
   if [[ -n "$NPM_REGISTRY" ]]; then
     run npm config set registry "$NPM_REGISTRY"
     ok "npm registry set to: $NPM_REGISTRY"
@@ -185,17 +390,26 @@ setup_user_npm_prefix() {
   run npm config set prefix "$npm_global_dir"
 
   if [[ ":$PATH:" != *":$npm_global_dir/bin:"* ]]; then
-    warn "Add this line to ~/.bashrc, then open a new shell:"
+    warn "Add this line to your shell rc, then open a new shell:"
     echo "export PATH=\"$npm_global_dir/bin:\$PATH\""
     export PATH="$npm_global_dir/bin:$PATH"
   fi
 }
 
 install_openclaw() {
-  log "[5/5] Installing OpenClaw via npm..."
+  log "[5/6] Installing OpenClaw via npm..."
   local spec="openclaw"
   if [[ "$OPENCLAW_VERSION" != "latest" ]]; then
     spec="openclaw@${OPENCLAW_VERSION}"
+  fi
+
+  # idempotent fast path
+  if command -v openclaw >/dev/null 2>&1; then
+    local cur
+    cur="$(openclaw --version 2>/dev/null | awk '{print $2}' | sed 's/^v//' || true)"
+    if [[ "$OPENCLAW_VERSION" == "latest" && -n "$cur" ]]; then
+      log "openclaw already installed (${cur}); continuing with npm install to ensure latest"
+    fi
   fi
 
   if [[ "$USE_SUDO_NPM" == "1" ]]; then
@@ -218,7 +432,7 @@ install_openclaw() {
 
 install_plugins() {
   if [[ "$INSTALL_CHANNEL_PLUGINS" != "1" ]]; then
-    warn "Plugin install skipped (INSTALL_CHANNEL_PLUGINS=0)"
+    warn "[6/6] Plugin install skipped (INSTALL_CHANNEL_PLUGINS=0)"
     return
   fi
 
@@ -227,7 +441,7 @@ install_plugins() {
     return
   fi
 
-  log "Installing channel plugins (Feishu/WeCom/DingTalk)..."
+  log "[6/6] Installing channel plugins (Feishu/WeCom/DingTalk)..."
   local plugins=(
     "@m1heng-clawd/feishu"
     "@wecom/wecom-openclaw-plugin"
@@ -247,14 +461,18 @@ install_plugins() {
 print_summary() {
   echo
   ok "Done. Summary:"
+  echo "  - OS:       ${OS_KIND} (wsl=${IS_WSL})"
   echo "  - Node:     $(node -v 2>/dev/null || echo missing)"
   echo "  - npm:      $(npm -v 2>/dev/null || echo missing)"
   echo "  - openclaw: $(openclaw --version 2>/dev/null || echo not found on PATH)"
+  echo "  - proxy:    ${HTTPS_PROXY:-${https_proxy:-<not set>}}"
   echo
-  echo "Recommended usage (WSL/CN):"
-  echo "  NPM_REGISTRY=https://registry.npmmirror.com FORCE_IPV4=1 bash $0"
-  echo "Plugin toggle:"
-  echo "  INSTALL_CHANNEL_PLUGINS=0 bash $0"
+  echo "Recommended usage:"
+  echo "  # WSL2/macOS auto-proxy"
+  echo "  AUTO_PROXY=1 NODE_USE_ENV_PROXY=1 bash $0"
+  echo
+  echo "  # Linux VPS simple path"
+  echo "  AUTO_PROXY=0 FORCE_IPV4=1 bash $0"
 }
 
 main() {
@@ -265,17 +483,23 @@ main() {
 
   need_cmd bash
   need_cmd curl
-  check_platform
+  detect_platform
 
-  log "OpenClaw optimized installer (Linux/WSL)"
-  log "Plan: version=${OPENCLAW_VERSION}, force_ipv4=${FORCE_IPV4}, sudo_npm=${USE_SUDO_NPM}"
+  log "OpenClaw universal installer"
+  log "Plan: version=${OPENCLAW_VERSION}, force_ipv4=${FORCE_IPV4}, sudo_npm=${USE_SUDO_NPM}, auto_proxy=${AUTO_PROXY}"
+
   if [[ "$PRINT_ONLY" == "1" ]]; then
     usage
     exit 0
   fi
 
+  ensure_proxy_behavior_for_node
+  wsl_auto_proxy
+  macos_auto_proxy
+
   network_probe
-  install_prereqs
+  install_prereqs_linux
+  install_prereqs_macos
   install_build_tools
   install_node22
   configure_npm_registry_if_needed
