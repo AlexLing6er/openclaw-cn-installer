@@ -1,5 +1,6 @@
 #requires -Version 5.1
 $ErrorActionPreference = 'Stop'
+$script:RegionHint = 'UNKNOWN'
 
 param(
   [ValidateSet('auto','cn','global')]
@@ -164,16 +165,34 @@ function Install-OpenClawOfficial {
   Invoke-WithRetry { iwr -useb https://openclaw.ai/install.ps1 | iex }
 }
 
+function Get-RegionHint {
+  $candidates = @('https://ipapi.co/country','https://ipinfo.io/country')
+  foreach($u in $candidates){
+    try {
+      $v = (Invoke-WebRequest -Uri $u -TimeoutSec 6).Content.Trim()
+      if($v -eq 'CN'){ return 'CN' }
+      if($v -match '^[A-Z]{2}$'){ return 'NON_CN' }
+    } catch {}
+  }
+  return 'UNKNOWN'
+}
+
 function Resolve-Route {
   $hasProxy = [bool]($env:HTTPS_PROXY -or $env:HTTP_PROXY)
   $official = Test-Url 'https://registry.npmjs.org/openclaw'
-  $cn = Test-Url 'https://registry.npmmirror.com/openclaw'
 
   if($Profile -eq 'cn'){ return 'CN_MIRROR' }
   if($Profile -eq 'global'){ return 'GLOBAL_DIRECT' }
 
-  if($hasProxy -and $official){ return 'PROXY_OFFICIAL' }
-  if($cn){ return 'CN_MIRROR' }
+  # Auto policy:
+  # proxy on -> official first
+  # no proxy + NON_CN -> official first
+  # no proxy + CN -> CN mirror first
+  if($hasProxy){ return 'PROXY_OFFICIAL' }
+
+  $script:RegionHint = Get-RegionHint
+  if($script:RegionHint -eq 'CN'){ return 'CN_MIRROR' }
+  if($script:RegionHint -eq 'NON_CN'){ return 'GLOBAL_DIRECT' }
   if($official){ return 'GLOBAL_DIRECT' }
   return 'CN_MIRROR'
 }
@@ -183,6 +202,7 @@ function Print-Decision([string]$Route){
   Write-Host "DetectedOS=Windows"
   Write-Host "Profile=$Profile"
   Write-Host "Route=$Route"
+  Write-Host "RegionHint=$script:RegionHint"
   Write-Host "Proxy=$($env:HTTPS_PROXY)"
   Write-Host "InstallMethod=$InstallMethod"
   Write-Host '========================'

@@ -110,11 +110,15 @@ curl -fsSL https://openclaw.ai/install.sh | bash -s -- --install-method git
 
 Installer prints a single final route on every run:
 
-- `PROXY_OFFICIAL` (proxy available + official endpoints reachable)
-- `CN_MIRROR` (prefer CN mirrors)
-- `GLOBAL_DIRECT` (direct global path)
+- `PROXY_OFFICIAL` (proxy enabled -> official first)
+- `GLOBAL_DIRECT` (no proxy + non-CN -> official first)
+- `CN_MIRROR` (no proxy + CN -> CN mirrors first)
 
 每次运行都会输出唯一安装路由，便于排障与审计。
+默认自动策略：
+- 开代理：优先官方源
+- 没开代理且在国外：优先官方源
+- 没开代理且在国内：优先第三方镜像（至少 2 个备选）
 
 ## Proxy Auto Detection / 代理自动检测
 

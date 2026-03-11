@@ -23,6 +23,7 @@ DEBIAN_FRONTEND="${DEBIAN_FRONTEND:-noninteractive}"
 OS_KIND=""
 IS_WSL=0
 ROUTE="UNKNOWN"
+REGION_HINT="UNKNOWN"
 SELECTED_NODE_SETUP_URL=""
 
 log(){ printf "\033[36m[INFO]\033[0m %s\n" "$*"; }
@@ -164,6 +165,22 @@ set_node_proxy_switch(){
   [[ "$NODE_USE_ENV_PROXY" == "1" ]] && export NODE_USE_ENV_PROXY=1 && log "NODE_USE_ENV_PROXY=1"
 }
 
+detect_region_hint(){
+  local r=""
+  mapfile -t cargs < <(curl_common)
+
+  r="$(curl -fsSL "${cargs[@]}" --max-time 6 https://ipapi.co/country 2>/dev/null | tr -d '\r\n ' || true)"
+  if [[ -z "$r" || ${#r} -gt 3 ]]; then
+    r="$(curl -fsSL "${cargs[@]}" --max-time 6 https://ipinfo.io/country 2>/dev/null | tr -d '\r\n ' || true)"
+  fi
+
+  case "$r" in
+    CN|cn) REGION_HINT="CN" ;;
+    "") REGION_HINT="UNKNOWN" ;;
+    *) REGION_HINT="NON_CN" ;;
+  esac
+}
+
 decide_route(){
   local has_proxy="0"
   [[ -n "${HTTPS_PROXY:-${https_proxy:-}}" ]] && has_proxy="1"
@@ -175,18 +192,30 @@ decide_route(){
 
   if [[ "$PROFILE" == "cn" ]]; then
     ROUTE="CN_MIRROR"
-  elif [[ "$PROFILE" == "global" ]]; then
+    return 0
+  fi
+  if [[ "$PROFILE" == "global" ]]; then
+    ROUTE="GLOBAL_DIRECT"
+    return 0
+  fi
+
+  # Auto policy required by user:
+  # 1) proxy on -> official first
+  # 2) no proxy + outside CN -> official first
+  # 3) no proxy + in CN -> CN mirrors first
+  if [[ "$has_proxy" == "1" ]]; then
+    ROUTE="PROXY_OFFICIAL"
+    return 0
+  fi
+
+  detect_region_hint
+  if [[ "$REGION_HINT" == "CN" ]]; then
+    ROUTE="CN_MIRROR"
+  elif [[ "$REGION_HINT" == "NON_CN" ]]; then
     ROUTE="GLOBAL_DIRECT"
   else
-    if [[ "$has_proxy" == "1" && "$official_ok" == "1" ]]; then
-      ROUTE="PROXY_OFFICIAL"
-    elif [[ "$cn_ok" == "1" ]]; then
-      ROUTE="CN_MIRROR"
-    elif [[ "$official_ok" == "1" ]]; then
-      ROUTE="GLOBAL_DIRECT"
-    else
-      ROUTE="CN_MIRROR"
-    fi
+    # Unknown region: prefer official if reachable, else CN mirror
+    if [[ "$official_ok" == "1" ]]; then ROUTE="GLOBAL_DIRECT"; else ROUTE="CN_MIRROR"; fi
   fi
 }
 
@@ -196,6 +225,7 @@ print_decision(){
   echo "DetectedEnv=$([[ "$IS_WSL" -eq 1 ]] && echo WSL2 || echo "$OS_KIND")"
   echo "Profile=$PROFILE"
   echo "Route=$ROUTE"
+  echo "RegionHint=$REGION_HINT"
   echo "Proxy=${HTTPS_PROXY:-${https_proxy:-<none>}}"
   echo "NpmRegistry=${NPM_REGISTRY:-<auto>}"
   echo "NodeSetup=${SELECTED_NODE_SETUP_URL:-<auto>}"
