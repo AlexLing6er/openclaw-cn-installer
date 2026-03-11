@@ -1,5 +1,4 @@
 #requires -Version 5.1
-$ErrorActionPreference = 'Stop'
 
 param(
   [ValidateSet('auto','cn','global')]
@@ -12,6 +11,7 @@ param(
   [switch]$UseUserNpmPrefix
 )
 
+$ErrorActionPreference = 'Stop'
 $script:RegionHint = 'UNKNOWN'
 
 function Log($m){ Write-Host "[INFO] $m" -ForegroundColor Cyan }
