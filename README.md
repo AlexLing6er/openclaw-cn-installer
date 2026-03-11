@@ -91,6 +91,10 @@ powershell -ExecutionPolicy Bypass -File .\openclaw-install-optimized.ps1 -Check
 # 方式A：官方安装脚本
 iwr -useb https://openclaw.ai/install.ps1 | iex
 
+# Option A2: Official .cmd bootstrap (some Win environments)
+# 方式A2：官方 .cmd 引导（部分 Windows 环境更稳）
+curl -fsSL https://openclaw.ai/install.cmd -o install.cmd && install.cmd && del install.cmd
+
 # Option B: npm install
 # 方式B：npm 安装
 npm i -g openclaw
@@ -191,11 +195,18 @@ When mirrors are selected, most dependency traffic can stay on CN mirrors.
 
 ```bash
 export NODE_USE_ENV_PROXY=1
-# WSL2: customize ports if needed
-WSL_PROXY_PORT_CANDIDATES=10808,7897,8888 CHECK_ONLY=1 PROFILE=cn bash scripts/openclaw-install-optimized.sh
+# WSL2: customize ports if needed (v2ray/clash/custom)
+WSL_PROXY_PORT_CANDIDATES=10808,7897,10810,8888 CHECK_ONLY=1 PROFILE=cn bash scripts/openclaw-install-optimized.sh
 ```
 
-### 2) npm install 太慢或超时
+### 2) WSL2 代理端口冲突（10808 被占用）
+
+```bash
+# specify your actual local proxy port
+WSL_PROXY_PORT_CANDIDATES=10810,7897 PROFILE=cn bash scripts/openclaw-install-optimized.sh
+```
+
+### 3) npm install 太慢或超时
 
 ```bash
 NPM_REGISTRY=https://registry.npmmirror.com PROFILE=cn bash scripts/openclaw-install-optimized.sh

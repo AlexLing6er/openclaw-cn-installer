@@ -434,11 +434,19 @@ install_openclaw(){
   local spec="openclaw"
   [[ "$OPENCLAW_VERSION" != "latest" ]] && spec="openclaw@${OPENCLAW_VERSION}"
 
-  if [[ "$USE_SUDO_NPM" == "1" ]]; then sudo_run npm install -g "$spec" --no-fund --no-audit
-  else setup_user_prefix; npm install -g "$spec" --no-fund --no-audit; fi
+  if [[ "$USE_SUDO_NPM" == "1" ]]; then
+    if ! sudo_run npm install -g "$spec" --no-fund --no-audit; then
+      warn "sudo npm install failed; fallback to user npm prefix"
+      setup_user_prefix
+      npm install -g "$spec" --no-fund --no-audit
+    fi
+  else
+    setup_user_prefix
+    npm install -g "$spec" --no-fund --no-audit
+  fi
 
   hash -r || true
-  command -v openclaw >/dev/null 2>&1 && ok "openclaw: $(openclaw --version)" || { err "openclaw not in PATH"; exit 1; }
+  command -v openclaw >/dev/null 2>&1 && ok "openclaw: $(openclaw --version)" || { err "openclaw not in PATH (try: export PATH=\"$HOME/.npm-global/bin:\$PATH\")"; exit 1; }
 }
 
 install_plugins(){
