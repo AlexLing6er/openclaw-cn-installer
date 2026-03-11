@@ -221,6 +221,10 @@ function Install-OpenClawViaNpm {
   npm config set registry $reg | Out-Null
   Ok "npm registry: $reg"
 
+  # Avoid SSH-only git dependency failures in restricted/corporate/CN networks.
+  git config --global url."https://github.com/".insteadOf ssh://git@github.com/ | Out-Null
+  git config --global url."https://github.com/".insteadOf git@github.com: | Out-Null
+
   Log 'Installing openclaw via npm'
   try {
     Invoke-WithRetry { npm install -g openclaw --no-fund --no-audit }
@@ -231,8 +235,8 @@ function Install-OpenClawViaNpm {
   }
 
   $cmd = Get-Command openclaw -ErrorAction SilentlyContinue
-  if(-not $cmd){ Warn 'openclaw not in PATH yet. Open a new PowerShell and run: openclaw --version' }
-  else { Ok "openclaw: $(openclaw --version)" }
+  if(-not $cmd){ throw 'npm install finished but openclaw command not found in PATH.' }
+  Ok "openclaw: $(openclaw --version)"
 }
 
 function Install-OpenClawOfficial {
