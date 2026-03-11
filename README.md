@@ -11,7 +11,7 @@ Blog / 博客: https://www.youdiandou.store
 
 ```bash
 curl -fsSL "https://raw.githubusercontent.com/AlexLing6er/openclaw-cn-installer/main/scripts/openclaw-install-optimized.sh" | PROFILE=auto bash
-openclaw onboard --install-daemon
+/usr/local/bin/openclaw onboard --install-daemon || openclaw onboard --install-daemon
 openclaw --version
 ```
 

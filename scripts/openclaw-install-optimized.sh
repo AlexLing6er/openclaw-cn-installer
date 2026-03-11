@@ -601,9 +601,14 @@ main(){
   safe_cleanup
 
   ok "Done"
+  local oc_bin
+  oc_bin="$(command -v openclaw 2>/dev/null || true)"
+  [[ -z "$oc_bin" && -x /usr/local/bin/openclaw ]] && oc_bin="/usr/local/bin/openclaw"
+  [[ -z "$oc_bin" ]] && oc_bin="openclaw"
+
   printf "\n\033[1;32m%s\033[0m\n" "========================================"
   printf "\033[1;32m%s\033[0m\n" "NEXT STEP / 下一步（必须执行）"
-  printf "\033[1;33m%s\033[0m\n" "openclaw onboard --install-daemon"
+  printf "\033[1;33m%s\033[0m\n" "$oc_bin onboard --install-daemon"
   printf "\033[1;32m%s\033[0m\n\n" "========================================"
 }
 
