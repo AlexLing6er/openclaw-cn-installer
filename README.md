@@ -57,6 +57,22 @@ Universal OpenClaw installer for Windows/WSL2/macOS/Linux with CN+Global profile
 - 海外 Win/macOS/Linux：用 `PROFILE=global`
 - 不确定环境：先跑 `CHECK_ONLY=1`
 
+## CDN Fallback (when GitHub is unstable) / GitHub 不稳定时的 CDN 备用
+
+### Windows PowerShell
+
+```powershell
+curl.exe -L "https://cdn.jsdelivr.net/gh/AlexLing6er/openclaw-cn-installer@0c7d3b3/scripts/openclaw-install-optimized.ps1" -o .\openclaw-install-optimized.ps1
+dir .\openclaw-install-optimized.ps1
+powershell -ExecutionPolicy Bypass -File .\openclaw-install-optimized.ps1 -Profile auto -InstallMethod auto
+```
+
+### Linux / WSL2 / macOS
+
+```bash
+curl -fsSL "https://cdn.jsdelivr.net/gh/AlexLing6er/openclaw-cn-installer@0c7d3b3/scripts/openclaw-install-optimized.sh" | PROFILE=auto bash
+```
+
 ## One-line to OpenClaw Onboarding / 一键直达 Onboarding
 
 ### Linux / WSL2 / macOS
