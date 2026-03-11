@@ -466,11 +466,21 @@ configure_npm_registry(){
   ok "npm registry: $NPM_REGISTRY"
 }
 
+ensure_path_line(){
+  local line="$1"
+  local rc
+  for rc in "$HOME/.bashrc" "$HOME/.profile"; do
+    touch "$rc"
+    grep -Fqx "$line" "$rc" || echo "$line" >> "$rc"
+  done
+}
+
 setup_user_prefix(){
   local d="$HOME/.npm-global"
   mkdir -p "$d"
   npm config set prefix "$d"
   export PATH="$d/bin:$PATH"
+  ensure_path_line "export PATH=\"$HOME/.npm-global/bin:\$PATH\""
 }
 
 install_openclaw(){
@@ -488,8 +498,27 @@ install_openclaw(){
     npm install -g "$spec" --no-fund --no-audit
   fi
 
+  # PATH reconciliation for heterogeneous VPS environments
+  local npm_prefix npm_bin
+  npm_prefix="$(npm config get prefix 2>/dev/null || true)"
+  npm_bin="${npm_prefix%/}/bin"
+  [[ -d "$npm_bin" ]] && export PATH="$npm_bin:$PATH"
   hash -r || true
-  command -v openclaw >/dev/null 2>&1 && ok "openclaw: $(openclaw --version)" || { err "openclaw not in PATH (try: export PATH=\"$HOME/.npm-global/bin:\$PATH\")"; exit 1; }
+
+  if command -v openclaw >/dev/null 2>&1; then
+    ok "openclaw: $(openclaw --version)"
+    return 0
+  fi
+
+  # final fallback: symlink discovered binary into /usr/local/bin
+  local oc
+  oc="$(find "$HOME" /usr/local /usr -maxdepth 4 -type f -name openclaw 2>/dev/null | head -n1 || true)"
+  if [[ -n "$oc" && -x "$oc" ]]; then
+    sudo_run ln -sf "$oc" /usr/local/bin/openclaw
+    hash -r || true
+  fi
+
+  command -v openclaw >/dev/null 2>&1 && ok "openclaw: $(openclaw --version)" || { err "openclaw not in PATH (prefix=$npm_prefix). Try: export PATH=\"$npm_bin:\$PATH\""; exit 1; }
 }
 
 install_plugins(){
