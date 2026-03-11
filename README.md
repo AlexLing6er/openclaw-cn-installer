@@ -57,20 +57,43 @@ Universal OpenClaw installer for Windows/WSL2/macOS/Linux with CN+Global profile
 - 海外 Win/macOS/Linux：用 `PROFILE=global`
 - 不确定环境：先跑 `CHECK_ONLY=1`
 
-## CDN Fallback (when GitHub is unstable) / GitHub 不稳定时的 CDN 备用
+## Download Priority / 下载优先级（实测推荐）
 
-### Windows PowerShell
+### 1) Primary: GitHub raw (recommended) / 主通道：GitHub raw（推荐）
+
+#### Windows PowerShell
 
 ```powershell
-curl.exe -L "https://cdn.jsdelivr.net/gh/AlexLing6er/openclaw-cn-installer@0c7d3b3/scripts/openclaw-install-optimized.ps1" -o .\openclaw-install-optimized.ps1
-dir .\openclaw-install-optimized.ps1
+curl.exe -L "https://raw.githubusercontent.com/AlexLing6er/openclaw-cn-installer/main/scripts/openclaw-install-optimized.ps1" -o .\openclaw-install-optimized.ps1
 powershell -ExecutionPolicy Bypass -File .\openclaw-install-optimized.ps1 -Profile auto -InstallMethod auto
 ```
 
-### Linux / WSL2 / macOS
+#### Linux / WSL2 / macOS
 
 ```bash
-curl -fsSL "https://cdn.jsdelivr.net/gh/AlexLing6er/openclaw-cn-installer@0c7d3b3/scripts/openclaw-install-optimized.sh" | PROFILE=auto bash
+curl -fsSL "https://raw.githubusercontent.com/AlexLing6er/openclaw-cn-installer/main/scripts/openclaw-install-optimized.sh" | PROFILE=auto bash
+```
+
+### 2) Fallback: jsDelivr CDN / 备用：jsDelivr CDN
+
+#### Windows PowerShell
+
+```powershell
+curl.exe -L "https://cdn.jsdelivr.net/gh/AlexLing6er/openclaw-cn-installer@main/scripts/openclaw-install-optimized.ps1" -o .\openclaw-install-optimized.ps1
+powershell -ExecutionPolicy Bypass -File .\openclaw-install-optimized.ps1 -Profile auto -InstallMethod auto
+```
+
+#### Linux / WSL2 / macOS
+
+```bash
+curl -fsSL "https://cdn.jsdelivr.net/gh/AlexLing6er/openclaw-cn-installer@main/scripts/openclaw-install-optimized.sh" | PROFILE=auto bash
+```
+
+### 3) Final fallback: official installer / 最终兜底：官方安装器
+
+```powershell
+iwr -useb https://openclaw.ai/install.ps1 | iex
+openclaw onboard --install-daemon
 ```
 
 ## One-line to OpenClaw Onboarding / 一键直达 Onboarding
