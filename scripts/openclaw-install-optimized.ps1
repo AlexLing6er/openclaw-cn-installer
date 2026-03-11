@@ -37,10 +37,10 @@ function Err($m){ Write-Host "[ERR ] $m" -ForegroundColor Red }
 
 function Show-Credit {
   Write-Host ""
-  Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Magenta
-  Write-Host "By 逗号" -ForegroundColor Magenta
-  Write-Host "博客: https://www.youdiandou.store" -ForegroundColor Magenta
-  Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Magenta
+  Write-Host "========================================" -ForegroundColor Magenta
+  Write-Host "By Douhao" -ForegroundColor Magenta
+  Write-Host "Blog: https://www.youdiandou.store" -ForegroundColor Magenta
+  Write-Host "========================================" -ForegroundColor Magenta
   Write-Host ""
 }
 
@@ -50,7 +50,7 @@ try {
 } catch {}
 
 function Test-Url($url){
-  try { (Invoke-WebRequest -Uri $url -Method Head -TimeoutSec 12).StatusCode -ge 200 | Out-Null; return $true }
+  try { (Invoke-WebRequest -UseBasicParsing -Uri $url -Method Head -TimeoutSec 12).StatusCode -ge 200 | Out-Null; return $true }
   catch { return $false }
 }
 
@@ -126,7 +126,7 @@ function Ensure-Node22 {
 function Measure-UrlMs([string]$Url){
   try {
     $sw = [System.Diagnostics.Stopwatch]::StartNew()
-    Invoke-WebRequest -Uri $Url -Method Head -TimeoutSec 10 | Out-Null
+    Invoke-WebRequest -UseBasicParsing -Uri $Url -Method Head -TimeoutSec 10 | Out-Null
     $sw.Stop()
     return [int]$sw.ElapsedMilliseconds
   } catch {
@@ -219,7 +219,7 @@ function Get-RegionHint {
   $candidates = @('https://ipapi.co/country','https://ipinfo.io/country')
   foreach($u in $candidates){
     try {
-      $v = (Invoke-WebRequest -Uri $u -TimeoutSec 6).Content.Trim()
+      $v = (Invoke-WebRequest -UseBasicParsing -Uri $u -TimeoutSec 6).Content.Trim()
       if($v -eq 'CN'){ return 'CN' }
       if($v -match '^[A-Z]{2}$'){ return 'NON_CN' }
     } catch {}
