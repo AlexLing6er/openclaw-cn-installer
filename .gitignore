@@ -1,4 +1,31 @@
-
-# local memory (never publish)
+# Local memory/state (never publish)
 MEMORY.md
 memory/
+.openclaw/
+.clawhub/
+.pi/
+
+# Secrets / credentials
+*.pem
+*.key
+*.p12
+*.pfx
+*.kdbx
+.env
+.env.*
+secrets*
+credentials*
+
+# SSH / auth
+.ssh/
+
+# Node / logs
+node_modules/
+*.log
+npm-debug.log*
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
