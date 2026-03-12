@@ -43,8 +43,8 @@ function Err($m){ Write-Host "[ERR ] $m" -ForegroundColor Red }
 function Show-Credit {
   Write-Host ""
   Write-Host "========================================" -ForegroundColor Magenta
-  Write-Host "By Douhao / 作者：逗号" -ForegroundColor Magenta
-  Write-Host "Blog / 博客: https://www.youdiandou.store" -ForegroundColor Magenta
+  Write-Host "By Douhao" -ForegroundColor Magenta
+  Write-Host "Blog: https://www.youdiandou.store" -ForegroundColor Magenta
   Write-Host "========================================" -ForegroundColor Magenta
   Write-Host ""
 }
@@ -330,6 +330,6 @@ switch($InstallMethod){
 
 Write-Host ""
 Write-Host "========================================" -ForegroundColor Green
-Write-Host "NEXT STEP / 下一步（必须执行）" -ForegroundColor Green
+Write-Host "NEXT STEP (REQUIRED)" -ForegroundColor Green
 Write-Host "openclaw onboard --install-daemon" -ForegroundColor Yellow
 Write-Host "========================================" -ForegroundColor Green
