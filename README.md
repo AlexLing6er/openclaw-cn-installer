@@ -77,6 +77,34 @@ openclaw plugins install @wecom/wecom-openclaw-plugin
 openclaw plugins install @dingtalk-real-ai/dingtalk-connector
 ```
 
+### 更新 OpenClaw（推荐）
+
+#### Linux / macOS / WSL2
+```bash
+npm i -g openclaw
+openclaw --version
+```
+
+#### Windows (PowerShell)
+```powershell
+npm i -g openclaw
+openclaw --version
+```
+
+### 卸载 OpenClaw
+
+#### Linux / macOS / WSL2
+```bash
+npm uninstall -g openclaw
+which openclaw || echo "openclaw removed"
+```
+
+#### Windows (PowerShell)
+```powershell
+npm uninstall -g openclaw
+where openclaw
+```
+
 ### 路由逻辑（自动）
 - 开代理：优先官方源
 - 没代理 + 国外：优先官方源
