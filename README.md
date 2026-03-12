@@ -36,8 +36,9 @@ openclaw --version
 
 ```cmd
 powershell -ExecutionPolicy Bypass -Command "curl.exe -L https://raw.githubusercontent.com/AlexLing6er/openclaw-cn-installer/main/scripts/openclaw-install-optimized.ps1 -o openclaw-install-optimized.ps1 && powershell -ExecutionPolicy Bypass -File .\openclaw-install-optimized.ps1 -Profile auto -InstallMethod auto"
-openclaw onboard --install-daemon
-openclaw --version
+set "PATH=C:\Program Files\nodejs;%APPDATA%\npm;%PATH%"
+"%APPDATA%\npm\openclaw.cmd" onboard --install-daemon
+"%APPDATA%\npm\openclaw.cmd" --version
 ```
 
 ---

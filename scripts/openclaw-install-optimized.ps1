@@ -226,11 +226,29 @@ function Select-NpmRegistry {
   return 'https://registry.npmjs.org'
 }
 
+function Add-PathIfMissing([string]$PathValue){
+  if(-not $PathValue){ return }
+  if(-not (Test-Path $PathValue)){ return }
+  if($env:Path -notlike "*$PathValue*"){
+    $env:Path = "$PathValue;$env:Path"
+  }
+
+  $userPath = [Environment]::GetEnvironmentVariable('Path','User')
+  if($userPath -notlike "*$PathValue*"){
+    [Environment]::SetEnvironmentVariable('Path', ($userPath + ';' + $PathValue).Trim(';'), 'User')
+  }
+}
+
+function Ensure-BasicCliPath {
+  Add-PathIfMissing 'C:\Program Files\nodejs'
+  Add-PathIfMissing (Join-Path $env:APPDATA 'npm')
+}
+
 function Setup-UserNpmPrefix {
   $prefix = Join-Path $HOME '.npm-global'
   if(-not (Test-Path $prefix)){ New-Item -ItemType Directory -Force -Path $prefix | Out-Null }
   npm config set prefix $prefix | Out-Null
-  if(-not ($env:Path -like "*$prefix*")){ $env:Path = "$prefix;$env:Path" }
+  Add-PathIfMissing $prefix
   Ok "Using user npm prefix: $prefix"
 }
 
@@ -340,6 +358,7 @@ function Check-EndPoints {
 }
 
 Require-CurlExe
+Ensure-BasicCliPath
 Show-Credit
 Log "Profile=$Profile InstallMethod=$InstallMethod CheckOnly=$CheckOnly"
 Enable-ProxyIfDetected
