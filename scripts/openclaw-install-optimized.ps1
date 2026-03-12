@@ -234,6 +234,26 @@ function Setup-UserNpmPrefix {
   Ok "Using user npm prefix: $prefix"
 }
 
+function Ensure-OpenClawPath {
+  $prefix = (npm config get prefix 2>$null)
+  $candidates = @()
+  if($prefix){
+    $candidates += (Join-Path $prefix 'openclaw.cmd')
+    $candidates += (Join-Path $prefix 'openclaw.ps1')
+  }
+  $candidates += (Join-Path $env:APPDATA 'npm\openclaw.cmd')
+  $candidates += (Join-Path $env:ProgramFiles 'nodejs\openclaw.cmd')
+
+  foreach($c in $candidates){
+    if($c -and (Test-Path $c)){
+      $dir = Split-Path $c -Parent
+      if(-not ($env:Path -like "*$dir*")){ $env:Path = "$dir;$env:Path" }
+      [Environment]::SetEnvironmentVariable('Path', ([Environment]::GetEnvironmentVariable('Path','User') + ';' + $dir).Trim(';'), 'User')
+      break
+    }
+  }
+}
+
 function Install-OpenClawViaNpm {
   if($UseUserNpmPrefix){ Setup-UserNpmPrefix }
 
@@ -255,6 +275,7 @@ function Install-OpenClawViaNpm {
     Invoke-WithRetry { npm install -g openclaw --no-fund --no-audit }
   }
 
+  Ensure-OpenClawPath
   $cmd = Get-Command openclaw -ErrorAction SilentlyContinue
   if(-not $cmd){ throw 'npm install finished but openclaw command not found in PATH.' }
   Ok "openclaw: $(openclaw --version)"
@@ -349,8 +370,17 @@ switch($InstallMethod){
   }
 }
 
+Ensure-OpenClawPath
+$oc = Get-Command openclaw -ErrorAction SilentlyContinue
+$next = 'openclaw onboard --install-daemon'
+if(-not $oc){
+  Warn 'openclaw is not in current PATH yet. Reopen PowerShell and retry, or use full path from npm prefix.'
+  $prefix = (npm config get prefix 2>$null)
+  if($prefix){ $next = "& '$prefix\\openclaw.cmd' onboard --install-daemon" }
+}
+
 Write-Host ""
 Write-Host "========================================" -ForegroundColor Green
 Write-Host "NEXT STEP (REQUIRED)" -ForegroundColor Green
-Write-Host "openclaw onboard --install-daemon" -ForegroundColor Yellow
+Write-Host $next -ForegroundColor Yellow
 Write-Host "========================================" -ForegroundColor Green

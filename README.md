@@ -30,6 +30,8 @@ openclaw onboard --install-daemon
 openclaw --version
 ```
 
+> 如果提示 `openclaw` 找不到，请先关闭并重新打开 PowerShell 再执行。
+
 ### CMD（备用）
 
 ```cmd
