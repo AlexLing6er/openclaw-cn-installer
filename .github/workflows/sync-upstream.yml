@@ -10,6 +10,8 @@ permissions:
 
 jobs:
   sync:
+    # Avoid failures on normal repos (non-forks)
+    if: ${{ github.event.repository.fork == true }}
     runs-on: ubuntu-latest
     steps:
       - name: Sync fork from upstream
@@ -22,3 +24,10 @@ jobs:
 
       - name: Done
         run: echo "Fork sync completed"
+
+  non-fork-info:
+    if: ${{ github.event.repository.fork != true }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Skip info
+        run: echo "Repository is not a fork. Upstream sync workflow skipped."
