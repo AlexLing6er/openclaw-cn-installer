@@ -133,6 +133,26 @@ function Enable-ProxyIfDetected {
   }
 }
 
+function Ensure-Git {
+  $git = Get-Command git -ErrorAction SilentlyContinue
+  if($git){ Ok "Git OK: $(git --version)"; return }
+
+  $winget = Get-Command winget -ErrorAction SilentlyContinue
+  if(-not $winget){ throw 'Git is required but winget is not available. Install Git manually: https://git-scm.com/download/win' }
+
+  Log 'Installing Git via winget'
+  Invoke-WithRetry { winget install Git.Git --accept-package-agreements --accept-source-agreements --silent | Out-Null }
+
+  $machinePath = [Environment]::GetEnvironmentVariable('Path','Machine')
+  $userPath = [Environment]::GetEnvironmentVariable('Path','User')
+  $env:Path = "$machinePath;$userPath;$env:Path"
+
+  if(-not (Get-Command git -ErrorAction SilentlyContinue)){
+    throw 'Git install finished but not in PATH. Open a new terminal and rerun installer.'
+  }
+  Ok "Git OK after install: $(git --version)"
+}
+
 function Ensure-Node22 {
   $node = Get-Command node -ErrorAction SilentlyContinue
   if($node){
@@ -314,6 +334,7 @@ if($CheckOnly){
 }
 
 Ensure-Node22
+Ensure-Git
 
 switch($InstallMethod){
   'npm' { Install-OpenClawViaNpm }
