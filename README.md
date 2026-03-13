@@ -1,7 +1,7 @@
 # OpenClaw One-Click Installer (CN + Global)
 
 By Douhao / 作者：逗号  
-Blog / 博客: https://www.youdiandou.store
+Blog / 博客: https://www.youdiandou.store  
 Store / 卡网：https://key.apointfun.com
 ---
 
