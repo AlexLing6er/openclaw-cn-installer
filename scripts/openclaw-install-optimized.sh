@@ -508,21 +508,32 @@ install_openclaw(){
   [[ -d "$npm_bin" ]] && export PATH="$npm_bin:$PATH"
   hash -r || true
 
-  if command -v openclaw >/dev/null 2>&1; then
-    ok "openclaw: $(openclaw --version)"
-    # ensure parent shells can find command even when installer ran via pipe
-    if [[ -x "$npm_bin/openclaw" ]]; then
-      sudo_run ln -sf "$npm_bin/openclaw" /usr/local/bin/openclaw || true
-    fi
-    return 0
+  # PATH reconciliation: strongly ensure /usr/local/bin/openclaw exists
+  local npm_prefix npm_bin oc_path
+  npm_prefix="$(npm config get prefix 2>/dev/null || true)"
+  npm_bin="${npm_prefix%/}/bin"
+
+  # 1. Try to find the binary by command or known prefix
+  oc_path="$(command -v openclaw 2>/dev/null || true)"
+  if [[ -z "$oc_path" && -x "$npm_bin/openclaw" ]]; then
+    oc_path="$npm_bin/openclaw"
   fi
 
-  # final fallback: symlink discovered binary into /usr/local/bin
-  local oc
-  oc="$(find "$HOME" /usr/local /usr -maxdepth 4 -type f -name openclaw 2>/dev/null | head -n1 || true)"
-  if [[ -n "$oc" && -x "$oc" ]]; then
-    sudo_run ln -sf "$oc" /usr/local/bin/openclaw
+  # 2. Final fallback: deep search
+  if [[ -z "$oc_path" ]]; then
+    oc_path="$(find "$npm_prefix" "$HOME/.npm-global" /usr/local /usr -maxdepth 4 -type f -name openclaw 2>/dev/null | head -n1 || true)"
+  fi
+
+  if [[ -n "$oc_path" && -x "$oc_path" ]]; then
+    sudo_run ln -sf "$oc_path" /usr/local/bin/openclaw
+    ok "Linked openclaw to /usr/local/bin/openclaw"
+    export PATH="/usr/local/bin:$PATH"
     hash -r || true
+  fi
+
+  if command -v openclaw >/dev/null 2>&1; then
+    ok "openclaw: $(openclaw --version)"
+    return 0
   fi
 
   command -v openclaw >/dev/null 2>&1 && ok "openclaw: $(openclaw --version)" || { err "openclaw not in PATH (prefix=$npm_prefix). Try: export PATH=\"$npm_bin:\$PATH\""; exit 1; }
@@ -603,12 +614,21 @@ main(){
   ok "Done"
   local oc_bin
   oc_bin="$(command -v openclaw 2>/dev/null || true)"
-  [[ -z "$oc_bin" && -x /usr/local/bin/openclaw ]] && oc_bin="/usr/local/bin/openclaw"
-  [[ -z "$oc_bin" ]] && oc_bin="openclaw"
+  [[ -z "$oc_bin" ]] && oc_bin="/usr/local/bin/openclaw"
 
+  # Smart Onboarding Check
+  local status_out
+  status_out="$("$oc_bin" status 2>/dev/null || true)"
+  
   printf "\n\033[1;32m%s\033[0m\n" "========================================"
-  printf "\033[1;32m%s\033[0m\n" "NEXT STEP / 下一步（必须执行）"
-  printf "\033[1;33m%s\033[0m\n" "$oc_bin onboard --install-daemon"
+  if echo "$status_out" | grep -q "unreachable"; then
+    warn "Detected Gateway is NOT running! / 检测到 Gateway 未启动！"
+    printf "\033[1;32m%s\033[0m\n" "NEXT STEP (Fix Gateway) / 下一步（修复服务）："
+    printf "\033[1;33m%s\033[0m\n" "$oc_bin onboard --install-daemon"
+  else
+    printf "\033[1;32m%s\033[0m\n" "NEXT STEP / 下一步："
+    printf "\033[1;33m%s\033[0m\n" "$oc_bin status"
+  fi
   printf "\033[1;32m%s\033[0m\n\n" "========================================"
 }
 
