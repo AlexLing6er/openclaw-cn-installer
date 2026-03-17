@@ -623,11 +623,14 @@ main(){
   printf "\n\033[1;32m%s\033[0m\n" "========================================"
   if echo "$status_out" | grep -q "unreachable"; then
     warn "Detected Gateway is NOT running! / 检测到 Gateway 未启动！"
-    printf "\033[1;32m%s\033[0m\n" "NEXT STEP (Fix Gateway) / 下一步（修复服务）："
-    printf "\033[1;33m%s\033[0m\n" "$oc_bin onboard --install-daemon"
+    printf "\033[1;36m%s\033[0m\n" ">>> 推荐：配置开机自启并后台运行 (Recommended)"
+    printf "\033[1;33m%s\033[0m\n" "    $oc_bin onboard --install-daemon"
+    printf "\n\033[1;36m%s\033[0m\n" ">>> 或者：仅本次手动启动 (Manual Start)"
+    printf "\033[1;33m%s\033[0m\n" "    $oc_bin gateway start"
   else
-    printf "\033[1;32m%s\033[0m\n" "NEXT STEP / 下一步："
-    printf "\033[1;33m%s\033[0m\n" "$oc_bin status"
+    ok "Gateway is already online! / 服务已在运行！"
+    printf "\033[1;32m%s\033[0m\n" "查看状态 / Check status:"
+    printf "\033[1;33m%s\033[0m\n" "    $oc_bin status"
   fi
   printf "\033[1;32m%s\033[0m\n\n" "========================================"
 }
